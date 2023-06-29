@@ -5,7 +5,7 @@ Once PicPocket is :doc:`Installed <installation>`, you can create your PicPocket
 
 .. code-block:: bash
 
-    pickpocket initialize
+    picpocket initialize
 
 This will store PicPocket's configuration data (and its SQLite) within the directory `~/.config/picpocket`.
 You can specify a directory to save this information, but you will then need to specify that directory whenever you run PicPocket.
