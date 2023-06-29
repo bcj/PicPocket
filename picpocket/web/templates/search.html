@@ -1,0 +1,410 @@
+{% whitespace all %}
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+
+	<link rel="stylesheet" type="text/css" href="/style.css" >
+	<title>{{title}}</title>
+</head>
+<body>
+	{% module NavBar() %}
+
+	<main>
+		<h1>{{title}}</h1>
+		<p>{{description}}</p>
+
+		<form method="post">
+			<h4>Filters</h4>
+			<div id=join>
+				<label for="join-strategy">Match:</label>
+				<select id="join-strategy" name="join-strategy" onchange="set_join_visibility()">
+					<option value="all" selected>All Filters</option>
+					<option value="any">Any Filter</option>
+					{% if False %}<option value="pattern">Pattern</option>{% end %}
+				</select>
+				{% if False %}
+				<span id="join-pattern-div">
+					<label for="join-pattern">Pattern:</label>
+					<input type="text" name="join-pattern" pattern="^(\d|and|or|[() ])*$" placeholder="1 and (2 or 3)">
+				</span>
+				{% end %}
+			</div>
+			<div id="filters">
+				<noscript>
+					{% set parameter_types = set() %}{% for _, info in parameters %}{{parameter_types.add(info["type"]) or ""}}{% end %}
+					{% for index in range(5) %}
+					<div>
+						{{index + 1}}:
+						<select id="filter{{index + 1}}-parameter" name="filter{{index + 1}}-parameter">
+						<option value="" selected></option>
+						{% for name, info in parameters %}
+							<option value="{{name}}">{{info["label"]}}</option>
+						{% end %}
+						</select>
+						<select id="filter{{index + 1}}-comparison" name="filter{{index + 1}}-comparison">
+							{% if "number" in parameter_types or "date" in parameter_types %}
+							<option value="=">=</option>
+							<option value="≠">≠</option>
+							{% elif "text" in parameter_types %}
+							<option value="is">is</option>
+							<option value="is not">is not</option>
+							{% elif "option" in parameter_types %}
+							<option value="is">is</option>
+							{% end %}
+							{% if "number" in parameter_types or "date" in parameter_types or "text" in parameter_types %}
+							<option value="is set">is set</option>
+							<option value="isn't set">isn't set</option>
+							{% end %}
+							{% if "number" in parameter_types or "date" in parameter_types %}
+							<option value="<"><</option>
+							<option value="≤">≤</option>
+							<option value="≥">≥</option>
+							<option value=">">></option>
+							{% end %}
+							{% if "text" in parameter_types %}
+							<option value="starts with">starts with</option>
+							<option value="ends with">ends with</option>
+							<option value="contains">contains</option>
+							<option value="doesn't start with">doesn't start with</option>
+							<option value="doesn't end with">doesn't end with</option>
+							<option value="doesn't contain">doesn't contain</option>
+							{% end %}
+							{% if "list" in parameter_types %}
+							<option value="matches any">matches any</option>
+							<option value="matches all">matches all</option>
+							<option value="matches none">matches none</option>
+							{% end %}
+						</select>
+						{% if "list" in parameter_types %}
+						<textarea id="filter{{index + 1}}-value" name="filter{{index + 1}}-value" rows="1"></textarea>
+						{% else %}
+						<input type="{% if len(parameter_types) == 1 %}{{list(parameter_types)[0]}}{% else %}{{'text'}}{% end %}" id="filter{{index + 1}}-value" name="filter{{index + 1}}-value">
+						{% end %}
+					</div>
+					{% end %}
+				</noscript>
+			</div>
+			<button id="add-filter" type="button" onclick="add_filter()" hidden>Add Filter</button>
+			{% if other_parameters %}
+			<h5>Additional Filters</h5>
+			{% for field in other_parameters %}
+            <div class="form-item">
+                <label for="{{field['name']}}">{{field["label"]}}</label>
+                {% if field['input'] == "select" %}
+                <select name="{{field['name']}}" title="{{field['description']}}">
+                {% for option in (field['options']) %}
+                    <option value="{{option}}">{{option}}</option>
+                {% end %}
+                </select>
+                {% elif field['input'] == "textarea" %}
+                <br><textarea class="text" name={{field['name']}} title="{{field['description']}}" rows=3></textarea>
+                {% else %}
+                <input type="{{field['input']}}" name="{{field['name']}}" title="{{field['description']}}" {% if field["required"] %} required{% end %}{% if field["input"] == "checkbox"and field.get("default") %} checked{% end %}>
+                {% end %}
+            </div>
+            {% end%}
+            {% end %}
+			{% if order %}
+			<div id="order">
+				<h4>Order</h4>
+				<div id="columns">
+				{% for index in range(len(order)) %}
+					<div id="order{{index + 1}}">
+						<select id="order{{index + 1}}-property" name="order{{index + 1}}-property">
+							<option value="" selected></option>
+							{% for option in order %}
+							<option value="{{option}}">{{option}}</option>
+							{% end %}
+							<option value="random">random</option>
+						</select>
+						<select id="order{{index + 1}}-direction" name="order{{index + 1}}-direction">
+							<option value="ascending" selected>ascending</option>
+							<option value="descending">descending</option>
+						</select>
+						<select id="order{{index + 1}}-nulls" name="order{{index + 1}}-nulls">
+							<option value="first">blanks first</option>
+							<option value="last" selected>blanks last</option>
+						</select>
+					</div>
+				{% end %}
+				</div>
+				<br>
+				<div id="limit-offset">
+					<label for="limit">Limit:</label>
+					<input type="number" id="limit" name="limit">
+					<span id="offset-group">
+						<label for="offset">Offset:</label>
+						<input type="number" id="offset" name="offset" value="0">
+					</span>
+				</div>
+			</div>
+			{% end %}
+			<br>
+			<div><input type="submit" value="{{submit}}"</div>
+		</form>
+	</main>
+
+	<script type="text/javascript">
+		const PARAMETERS = new Map({% raw json.dumps(parameters) %});
+		const TYPES = {
+			"number": new Map(
+				[
+					["<", {"input": "number"}],
+					["≤", {"input": "number"}],
+					["=", {"input": "number"}],
+					["≥", {"input": "number"}],
+					[">", {"input": "number"}],
+					["≠", {"input": "number"}],
+					["is set", {"value": null}],
+					["isn't set", {"value": null}],
+				]
+			),
+			"text": new Map(
+				[
+					["is", {"input": "text"}],
+					["starts with", {"input": "text"}],
+					["ends with", {"input": "text"}],
+					["contains", {"input": "text"}],
+					["is set", {"value": null},],
+					["is not", {"input": "text"}],
+					["doesn't start with", {"input": "text"}],
+					["doesn't end with", {"input": "text"}],
+					["doesn't contain", {"input": "text"}],
+					["isn't set", {"value": null}],
+				]
+			),
+		};
+		let COUNT = 0;
+		let NEXT_INDEX = 1;
+		{% if order %}let COLUMNS = {{len(order)}};{% end %}
+
+		function add_filter() {
+			COUNT += 1;
+			const index = NEXT_INDEX;
+			NEXT_INDEX += 1;
+			base = "filter" + index;
+
+			let div = document.createElement("div");
+			div.id = base;
+
+			let span = document.createElement("span");
+			span.id = base + "-settings";
+
+			let label = document.createElement("label");
+			label.appendChild(document.createTextNode(index + ":"));
+			span.appendChild(label);
+
+			let select = document.createElement("select");
+			select.id = base + "-parameter";
+			select.setAttribute("name", select.id);
+
+			for ([name, info] of PARAMETERS) {
+				let option = document.createElement("option");
+				option.setAttribute("value", name);
+				option.appendChild(document.createTextNode(info["label"]));
+				select.appendChild(option);
+			}
+
+			select.setAttribute("onchange", "filter_change('" + base + "')");
+			span.appendChild(select);
+
+			div.appendChild(span);
+
+			button = document.createElement("button");
+			button.appendChild(document.createTextNode("remove"));
+			button.setAttribute("type", "button");
+			button.setAttribute("onclick", "remove_filter('" + base + "')");
+			div.appendChild(button);
+
+			document.getElementById("filters").appendChild(div);
+			filter_change(base);
+			set_join_visibility();
+		}
+
+		function remove_filter(name) {
+			COUNT -= 1;
+			document.getElementById(name).remove();
+			if ("filter" + (NEXT_INDEX - 1) == name) {
+				NEXT_INDEX -= 1;
+			}
+			set_join_visibility()
+		}
+
+		function filter_change(base) {
+			let select_value = document.getElementById(base + "-parameter").value;
+			let parameter = PARAMETERS.get(select_value);
+			let type = parameter["type"];
+
+			comparison = document.getElementById(base + "-comparison");
+			if (comparison) {
+				comparison.remove();
+			}
+
+			if (type == "option") {
+				label = document.getElementById(base + "-comparison-label")
+				if (label) {
+					label.remove();
+				}
+
+				value = document.getElementById(base + "-value")
+				if (value) {
+					value.remove();
+				}
+
+				comparison = document.createElement("input");
+				comparison.hidden = true;
+				comparison.id = base + "-comparison"
+				comparison.setAttribute("name", comparison.id);
+				comparison.setAttribute("value", "option");
+				settings = document.getElementById(base + "-settings");
+				settings.appendChild(comparison)
+				label = document.createElement("label")
+				label.id = base + "-comparison-label"
+				label.appendChild(document.createTextNode("="))
+				settings.appendChild(label)
+				select = document.createElement("select");
+				select.id = base + "-value";
+				label.setAttribute("for", select.id)
+				select.setAttribute("name", select.id);
+				for (value of parameter["options"]) {
+					option = document.createElement("option");
+					option.setAttribute("value", value);
+					option.appendChild(document.createTextNode(value));
+					select.appendChild(option);
+				}
+				settings.appendChild(select);
+			} else if (type == "list") {
+				label = document.getElementById(base + "-comparison-label")
+				if (label) {
+					label.remove();
+				}
+
+				value = document.getElementById(base + "-value")
+				if (value) {
+					value.remove();
+				}
+
+				comparison = document.createElement("input");
+				comparison.hidden = true;
+				comparison.id = base + "-comparison"
+				comparison.setAttribute("name", comparison.id);
+				comparison.setAttribute("value", "list");
+				settings = document.getElementById(base + "-settings");
+				settings.appendChild(comparison)
+				label = document.createElement("label")
+				label.id = base + "-comparison-label"
+				label.appendChild(document.createTextNode("in"))
+				settings.appendChild(label)
+				textarea = document.createElement("textarea")
+				textarea.id = base + "-value"
+				label.setAttribute("for", textarea.id)
+				textarea.setAttribute("name", textarea.id);
+				textarea.setAttribute("placeholder", "1 per line")
+				settings.appendChild(textarea)
+			} else {
+				select = document.createElement("select");
+				select.id = base + "-comparison";
+				select.setAttribute("name", select.id);
+				for ([value, info] of TYPES[type]) {
+					option = document.createElement("option");
+					option.setAttribute("value", value);
+					option.appendChild(document.createTextNode(value));
+					select.appendChild(option);
+				}
+				select.setAttribute(
+					"onchange",
+					"filter_comparison_change('" + base + "', '" + type + "')",
+				)
+				document.getElementById(base + "-settings").appendChild(select);
+
+				filter_comparison_change(base, type);
+			}
+		}
+
+		function filter_comparison_change(base, type) {
+			let select_value = document.getElementById(base + "-comparison").value;
+			let info = TYPES[type].get(select_value);
+
+			label = document.getElementById(base + "-comparison-label")
+			if (label) {
+				label.remove();
+			}
+
+			value = document.getElementById(base + "-value")
+			if (value) {
+				value.remove();
+			}
+
+			input = document.createElement("input")
+			input.id = base + "-value";
+			input.setAttribute("name", input.id);
+
+			if ("value" in info) {
+				input.hidden = true;
+			} else {
+				input.setAttribute("type", info["input"]);
+				input.required = true;
+			}
+
+			document.getElementById(base + "-settings").appendChild(input)
+		}
+
+		function set_join_visibility() {
+			if (COUNT > 1) {
+				document.getElementById("join").hidden = false;
+				document.getElementById("join-pattern-div").hidden = (
+					document.getElementById("join-strategy").value != "pattern"
+				);
+			} else {
+				document.getElementById("join").hidden = true;
+			}
+		}
+
+		{% if order %}
+		function check_ordering() {
+			let hidden = false;
+			for (i = 1; i <= COLUMNS; i++) {
+				base = "order" + i;
+				div = document.getElementById(base);
+				div.hidden = hidden;
+				if (!hidden) {
+					column = document.getElementById(base + "-property");
+					hidden = (!column.value || column.value == "random");
+					document.getElementById(base + "-direction").hidden = hidden;
+					document.getElementById(base + "-nulls").hidden = hidden;
+				}
+			}
+		}
+
+		function set_ordering() {
+			for (i = 1; i <= COLUMNS; i++) {
+				select = document.getElementById("order" + i + "-property");
+				select.setAttribute("onchange", "check_ordering()");
+			}
+			check_ordering();
+		}
+
+		function check_offset() {
+			document.getElementById("offset-group").hidden = !document.getElementById("limit").value;
+		}
+
+		function set_limit() {
+			document.getElementById("limit").setAttribute("onchange", "check_offset()");
+			check_offset();
+		}
+		{% end %}
+
+		function setup_js() {
+			document.getElementById("add-filter").hidden = false;
+			set_join_visibility();
+			{% if order %}
+			set_ordering();
+			set_limit();
+			{% end %}
+		}
+
+		window.addEventListener("DOMContentLoaded", setup_js);
+	</script>
+</body>
+</html>

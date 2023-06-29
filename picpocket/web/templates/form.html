@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{title}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>{{title}}</h1>
+        <p>{{description}}</p>
+
+        {% module DisplayImage(image) %}
+
+        <form method="post" {% if parameters and "file" in {field["input"] for field in parameters} %}enctype="multipart/form-data"{% end %}>
+            {% if parameters %}
+            {% for field in parameters %}
+            <div class="form-item" id="item-{{field['name']}}">
+                <label for="{{field['name']}}">{{field["label"]}}</label>
+                {% if field['input'] == "select" %}
+                <select name="{{field['name']}}" title="{{field['description']}}">
+                {% for option in (options.get(field['name']) or field['options']) %}
+                    <option value="{{option or none}}" {% if existing.get(field["name"]) == option %}selected{% end %}>{{option}}</option>
+                {% end %}
+                </select>
+                {% elif field['input'] == "textarea" %}
+                <br><textarea class="text" name={{field['name']}} title="{{field['description']}}" rows=3>{{existing.get(field['name']) or ""}}</textarea>
+                {% elif field['input'] == "hidden" %}
+                <input type="text" name="{{field['name']}}" value="{{existing.get(field['name'])}}" hidden>
+                {% else %}
+                <input type="{{field['input']}}" name="{{field['name']}}" title="{{field['description']}}" {% if field["input"] != "checkbox" %} value="{{existing.get(field['name']) or ''}}"{% else %}class="text"{% end %}{% if field["required"] %} required{% end %}{% if field["input"] == "checkbox" %}{% if field['name'] in existing %}{% if existing.get(field['name']) %} checked{% end %}{% elif field.get("default") %} checked{% end %}{% end %}>
+                {% end %}
+            </div>
+            {% end%}
+            {% end%}
+
+            <div><input type="submit" value="{{submit}}"</div>
+        </form>
+    </main>
+</body>
+</html>

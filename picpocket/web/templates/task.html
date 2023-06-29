@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{tasks[0].name if len(tasks) == 1 else "Tasks"}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        {% if len(tasks) != 1 %}
+        <h1>Tasks</h1>
+        {% end %}
+
+        <article>
+            {% if not tasks %}
+            <p>No tasks found</p>
+            {% else %}
+            {% for task in tasks %}
+            <div class="task-info">
+                <h2>{{task.name}}</h2>
+                {% if task.description %}<p>{{task.description}}</p>{% end %}
+                <div class="actions">
+                    <a class="action-link" href="{{reverse_url('tasks-run', task.name)}}">Run</a>
+                    <a class="action-link" href="{{reverse_url('tasks-edit', task.name)}}">Edit</a>
+                    <a class="action-link" href="{{reverse_url('tasks-remove', task.name)}}">Remove</a>
+                </div>
+                <dl>
+                    {% if task.last_ran %}
+                    <dt>Last Ran:</dt>
+                    <dd>{{task.last_ran.strftime("%Y-%m-%d %H:%M:%S")}}
+                    {% end %}
+
+                    <dt>Source:</dt>
+                    <dd>{{task.source}}</dd>
+
+                    <dt>Destination:</dt>
+                    <dd>{{task.destination}}</dd>
+
+                    {% if task.configuration %}
+                    <dt>Configuration:</dt>
+                    <dd>
+                        <dl>
+                        {% for key, value in sorted(task.configuration.items()) %}
+                            <dt>{{key}}</dt>
+                            <dd>
+                            {% if isinstance(value, list) %}
+                                <ul>
+                                {% for item in value %}
+                                    <li>{% if isinstance(item, str) %}{{item}}{% else %}{{json.dumps(item.serialize(), sort_keys=True)}}{% end %}</li>
+                                {% end %}
+                                </ul>
+                            {% else %}{{value}}{% end %}
+                            </dd>
+                        {% end %}
+                        <dl>
+                    </dd>
+                    {% end %}
+                </dl>
+            </div>
+            {% end %}
+            {% end %}
+        </article>
+
+    </main>
+</body>
+</html>

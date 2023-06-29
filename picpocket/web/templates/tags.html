@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>Tags</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <article>
+            <h1>Tags</h1>
+
+            <ul>
+            {% for tag in sorted(tags) %}
+                <li><a href="{{reverse_url('tags-get')}}?name={{url_escape(tag)}}">{{tag}}</a></li>
+            {% end %}
+            </ul>
+
+        </article>
+    </main>
+</body>
+</html>

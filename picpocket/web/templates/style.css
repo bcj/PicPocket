@@ -1,0 +1,102 @@
+:root {
+    --background-color: {{light.background}};
+    --secondary-color: {{light.secondary}};
+    --text-color: {{light.text}};
+    --accent-color: {{light.accent}};
+    --accent-text-color: {{light.accent_text}};
+    --border-color: {{light.border}};
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background-color: {{dark.background}};
+        --secondary-color: {{dark.secondary}};
+        --text-color: {{dark.text}};
+        --accent-color: {{dark.accent}};
+        --accent-text-color: {{dark.accent_text}};
+        --border-color: {{dark.border}};
+    }
+
+    a:link {
+        color: #B0A3D4;
+    }
+
+    a:visited {
+        color: #FFDDE2;
+    }
+}
+
+nav {
+    position: fixed;
+    top: 0;
+    right: 1em;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    border-top: 0em;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    background-color: var(--secondary-color);
+    border-style: solid;
+    border-color: var(--accent-color);
+    box-shadow: 0.25em 0.25em 0.5em black;
+}
+
+nav > a {
+    padding-left: 0.25em;
+    padding-right: 0.25em;
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 18px;
+
+    max-width: 1000px;
+
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+h1 {
+    color: var(--accent-color);
+}
+
+dt {
+    font-weight: bold;
+}
+
+table {
+    border-collapse: collapse;
+    border-style: solid;
+}
+
+th, td {
+    border-style: solid;
+    border-color: var(--border-color);
+}
+
+tr:nth-child(even) {
+    background-color: var(--secondary-color);
+}
+
+th {
+    background-color: var(--accent-color);
+    color: var(--accent-text-color);
+}
+
+.form-item {
+    width: 50%;
+}
+
+.text {
+    width: 100%;
+}
+
+.picpocket-image {
+    width: 100%;
+}
+
+input:invalid:required ~ .go-action {
+    visibility: hidden;
+}

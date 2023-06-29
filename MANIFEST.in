@@ -1,0 +1,4 @@
+include picpocket/database/*.sql
+include picpocket/web/templates/*.css
+include picpocket/web/templates/*.html
+include picpocket/web/templates/modules/*.html

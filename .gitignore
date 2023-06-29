@@ -1,0 +1,12 @@
+.DS_Store
+
+docs/_build
+
+__pycache__/
+
+.coverage*
+.tox/
+build/
+picpocket.egg-info
+tests/pg-config.json
+tests/Dockerfile

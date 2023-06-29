@@ -1,0 +1,5 @@
+<nav>
+    {% for name, info in navbar.items() %}
+    <a href="{{info.path}}" title="{{info.title}}">{{name}}</a>
+    {% end %}
+</nav>

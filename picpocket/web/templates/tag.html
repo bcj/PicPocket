@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{tag.name.rsplit("/", 1)[-1]}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <article>
+            <h1>{{tag.name}}</h1>
+
+            <div class="actions">
+                <a class="action-link" href="{{reverse_url('tags-move')}}?name={{url_escape(tag.name)}}">Move</a>
+                <a class="action-link" href="{{reverse_url('tags-edit')}}?name={{url_escape(tag.name)}}">Edit</a>
+                <a class="action-link" href="{{reverse_url('tags-remove')}}?name={{url_escape(tag.name)}}">Remove</a>
+            </div>
+
+            {% if tag.description %}<p>{{tag.description}}</p>{% end %}
+
+            {% if tag.children %}
+            <h3>Children</h3>
+            <ul>
+            {% for child in sorted(tag.children) %}
+                <li><a href="{{reverse_url('tags-get')}}?name={{url_escape(f'{tag.name}/{child}')}}">{{child}}</a></li>
+            {% end %}
+            </ul>
+            {% end %}
+
+            <h3>Images</h3>
+            <a class="action-link" href="{{reverse_url('tags-images')}}?name={{url_escape(tag.name)}}">Tagged Images</a>
+
+        </article>
+    </main>
+</body>
+</html>

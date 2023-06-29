@@ -1,0 +1,12 @@
+{% if image and mime %}
+<div class="image">
+    {% if mime.startswith("image/") %}
+    <a href="{{reverse_url('images-file', image.id)}}" target="_blank"><img class="picpocket-image" src="{{reverse_url('images-file', image.id)}}" {% if image.alt %}alt="{{image.alt}}"{% end %}></a>
+    {% else %}
+    <video controls loop>
+        <source src="{{reverse_url('images-file', image.id)}}" type="{{mime}}">
+    </video>
+    {% end %}
+    {% if image.caption %}<p>{{image.caption}}</p>{% end %}
+</div>
+{% end %}
