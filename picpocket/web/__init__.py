@@ -978,7 +978,8 @@ class ImagesEditHandler(BaseApiHandler):
 
         existing = image.serialize()
         if "tags" in existing:
-            existing["existing-tags"] = existing["tags"] = "\n".join(image.tags)
+            existing["tags"] = "\n".join(image.tags)
+            existing["existing-tags"] = json.dumps(image.tags)
         self.write_form(
             "form.html",
             self.endpoint,
@@ -1000,7 +1001,7 @@ class ImagesEditHandler(BaseApiHandler):
         existing = set()
         existingstr = self.get_body_argument("existing-tags", None)
         if existingstr:
-            existing = set(existingstr.splitlines())
+            existing = set(json.loads(existingstr))
 
         tags = set()
         tagsstr = self.get_body_argument("tags", None)

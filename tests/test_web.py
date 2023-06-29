@@ -755,14 +755,17 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         assert inputs["caption"] == {"type": "text", "value": None}
         assert inputs["creator"] == {"type": "text", "value": "bcj"}
         assert inputs["existing-tags"]["type"] == "text"
-        assert set(inputs["existing-tags"]["value"].splitlines()) == {
+        assert set(inputs["tags"]["value"].splitlines()) == {
+            "tag",
+            "nested/tag",
+            "nested/too",
+        }
+        assert set(json.loads(inputs["existing-tags"]["value"])) == {
             "tag",
             "nested/tag",
             "nested/too",
         }
         assert inputs["rating"] == {"type": "number", "value": None}
-        assert inputs["tags"]["type"] == "textarea"
-        assert inputs["tags"]["value"] == inputs["existing-tags"]["value"]
         assert inputs["title"] == {"type": "text", "value": None}
 
         response = requests.post(
