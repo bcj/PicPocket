@@ -19,6 +19,11 @@ async def temporary_server(port: int):
 
             await api.add_location("camera", source=True, removable=True)
             main_id = await api.add_location("main", directory, destination=True)
+            await api.add_tag("fake", "a fake tag")
+            await api.add_tag("fake/child", "a fake child tag")
+            await api.add_tag("fake/child/grandchild")
+            await api.add_tag("another-tag")
+            await api.add_tag("another-tag/child")
 
             try:
                 await run_server(api, port)
