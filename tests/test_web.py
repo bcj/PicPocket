@@ -996,7 +996,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             },
             "path": {"type": "text", "value": None},
             "rating": {"type": "number", "value": None},
-            "tags": {"type": "textarea", "value": None},
+            "tags-list": {"type": "textarea", "value": None},
             "title": {"type": "text", "value": None},
         }
 
@@ -1019,7 +1019,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
                     "alt": "my description",
                     "caption": caption,
                     "rating": 3,
-                    "tags": "tag/1\ntag/2\nthree",
+                    "tags": ["tag/1", "tag/2", "three"],
                 },
                 files={"file": image_files[0].open("rb")},
             )
@@ -1270,7 +1270,7 @@ async def test_tags(run_web, tmp_path, image_files):
                 {
                     "location": "main",
                     "path": f"{index}.jpg",
-                    "tags": tags,
+                    "tags-list": tags,
                 },
                 files={"file": image_files[0].open("rb")},
             )

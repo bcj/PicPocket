@@ -80,6 +80,7 @@ class BaseHandler(RequestHandler):
         endpoint: Endpoint,
         options: Optional[dict[str, list[str]]] = None,
         existing: Optional[dict[str, Any]] = None,
+        known_tags: Optional[list[str]] = None,
         **kwargs,
     ):
         if options is None:
@@ -96,6 +97,7 @@ class BaseHandler(RequestHandler):
             submit=endpoint.submit,
             options=options,
             existing=existing,
+            known_tags=known_tags,
             **kwargs,
         )
 
@@ -455,7 +457,9 @@ class LocationsImportHandler(BaseApiHandler):
         if location is None:
             raise HTTPError(404, f"Unknown location: {name_or_id}")
 
-        self.write_form("form.html", self.endpoint)
+        known_tags = sorted(await self.api.all_tag_names())
+
+        self.write_form("form.html", self.endpoint, known_tags=known_tags)
 
     async def post(self, name_or_id):
         name_or_id = int_or_str(name_or_id)
@@ -469,10 +473,11 @@ class LocationsImportHandler(BaseApiHandler):
             except Exception:
                 raise HTTPError(400, f"Invalid batch size: {batch_str}")
 
-        tags = []
-        tags_string = self.get_body_argument("tags")
-        if tags_string:
-            tags = list(tags_string.splitlines())
+        tags = self.get_body_arguments("tags", None)
+        if not tags:
+            tagsstr = self.get_body_argument("tags-list", None)
+            if tagsstr:
+                tags = tagsstr.splitlines()
 
         formats = []
         formats_string = self.get_body_argument("file_formats")
@@ -614,7 +619,6 @@ class ImagesSearchHandler(BaseApiHandler):
             other_parameters=self.parameters,
             order=self.order,
             properties=self.properties,
-            json=json,
         )
 
     async def post(self):
@@ -804,12 +808,19 @@ class ImagesUploadHandler(BaseApiHandler):
         locations = await self.api.list_locations()
         options = {"location": []}
         for location in sorted(locations, key=lambda location: location.name):
-            options["location"].append(location.name)
+            if location.destination:
+                options["location"].append(location.name)
+
+        if not options["location"]:
+            raise HTTPError(400, "Create a destination location first")
+
+        known_tags = sorted(await self.api.all_tag_names())
 
         self.write_form(
             "form.html",
             self.endpoint,
             options=options,
+            known_tags=known_tags,
         )
 
     async def post(self):
@@ -837,9 +848,11 @@ class ImagesUploadHandler(BaseApiHandler):
         else:
             data["rating"] = None
 
-        tagsstr = self.get_body_argument("tags", None)
-        if tagsstr:
-            data["tags"] = list(tagsstr.splitlines())
+        data["tags"] = self.get_body_arguments("tags", None)
+        if not data["tags"]:
+            tagsstr = self.get_body_argument("tags-list", None)
+            if tagsstr:
+                data["tags"] = tagsstr.splitlines()
 
         with TemporaryDirectory() as directory_name:
             source = Path(directory_name) / file["filename"]
@@ -976,15 +989,18 @@ class ImagesEditHandler(BaseApiHandler):
         if image is None:
             raise HTTPError(404, f"Unknown image: {image_id}")
 
+        known_tags= sorted(await self.api.all_tag_names())
+
         existing = image.serialize()
         if "tags" in existing:
-            existing["tags"] = "\n".join(image.tags)
+            existing["tags"] = image.tags
             existing["existing-tags"] = json.dumps(image.tags)
         self.write_form(
             "form.html",
             self.endpoint,
             existing=existing,
             image=image,
+            known_tags=known_tags
         )
 
     async def post(self, image_id):
@@ -1004,11 +1020,13 @@ class ImagesEditHandler(BaseApiHandler):
             existing = set(json.loads(existingstr))
 
         tags = set()
-        tagsstr = self.get_body_argument("tags", None)
-        if tags is None:
-            existing = set()
-        elif tagsstr:
-            tags = set(tagsstr.splitlines())
+        tags_list = self.get_body_arguments("tags", None)
+        if tags_list:
+            tags = set(tags_list)
+        else:
+            tagsstr = self.get_body_argument("tags-list", None)
+            if tagsstr:
+                tags = set(tagsstr.splitlines())
 
         try:
             id = int(image_id)
@@ -1350,7 +1368,7 @@ class TasksAddHandler(BaseApiHandler):
 
 class TasksListHandler(BaseApiHandler):
     async def get(self):
-        self.render_web("task.html", tasks=await self.api.list_tasks(), json=json)
+        self.render_web("task.html", tasks=await self.api.list_tasks())
 
 
 class TasksRunHandler(BaseApiHandler):
@@ -1386,7 +1404,7 @@ class TasksGetHandler(BaseApiHandler):
         if task is None:
             raise HTTPError(404, f"Unknown task: {name}")
 
-        self.render_web("task.html", tasks=[task], json=json)
+        self.render_web("task.html", tasks=[task])
 
 
 class TasksEditHandler(BaseApiHandler):
@@ -1797,8 +1815,8 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                     "name": "tags",
                     "description": "Tags to apply to all imported images.",
                     "required": False,
-                    "input": "textarea",
-                    "label": "Tags (one per line):",
+                    "input": "tags",
+                    "label": "Tags:",
                 },
             ],
         ),
@@ -2006,8 +2024,8 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                     "name": "tags",
                     "description": "Tags to apply to all imported images.",
                     "required": False,
-                    "input": "textarea",
-                    "label": "Tags (one per line):",
+                    "input": "tags",
+                    "label": "Tags:",
                 },
                 {
                     "name": "batch_size",
@@ -2165,14 +2183,14 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                     "description": "Tags to apply to all imported images.",
                     "required": False,
                     "input": "hidden",
-                    "label": "Tags (one per line):",
+                    "label": "",
                 },
                 {
                     "name": "tags",
                     "description": "Tags to apply to all imported images.",
                     "required": False,
-                    "input": "textarea",
-                    "label": "Tags (one per line):",
+                    "input": "tags",
+                    "label": "Tags:",
                 },
             ],
         ),

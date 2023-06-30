@@ -49,7 +49,7 @@
                             {% if isinstance(value, list) %}
                                 <ul>
                                 {% for item in value %}
-                                    <li>{% if isinstance(item, str) %}{{item}}{% else %}{{json.dumps(item.serialize(), sort_keys=True)}}{% end %}</li>
+                                    <li>{% if isinstance(item, str) %}{{item}}{% else %}{{json_encode(item.serialize(), sort_keys=True)}}{% end %}</li>
                                 {% end %}
                                 </ul>
                             {% else %}{{value}}{% end %}
