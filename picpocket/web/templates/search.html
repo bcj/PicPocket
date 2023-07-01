@@ -14,7 +14,7 @@
 		<h1>{{title}}</h1>
 		<p>{{description}}</p>
 
-		<form method="post">
+		<form class="box search-form" method="post">
 			<h4>Filters</h4>
 			<div id=join>
 				<label for="join-strategy">Match:</label>
@@ -30,11 +30,11 @@
 				</span>
 				{% end %}
 			</div>
-			<div id="filters">
+			<div id="filters" class="form-group">
 				<noscript>
 					{% set parameter_types = set() %}{% for _, info in parameters %}{{parameter_types.add(info["type"]) or ""}}{% end %}
 					{% for index in range(5) %}
-					<div>
+					<div class="filter-item">
 						{{index + 1}}:
 						<select id="filter{{index + 1}}-parameter" name="filter{{index + 1}}-parameter">
 						<option value="" selected></option>
@@ -106,11 +106,11 @@
             {% end%}
             {% end %}
 			{% if order %}
-			<div id="order">
+			<div id="order" class="form-group">
 				<h4>Order</h4>
 				<div id="columns">
 				{% for index in range(len(order)) %}
-					<div id="order{{index + 1}}">
+					<div id="order{{index + 1}}" class="order-group">
 						<select id="order{{index + 1}}-property" name="order{{index + 1}}-property">
 							<option value="" selected></option>
 							{% for option in order %}
@@ -130,13 +130,13 @@
 				{% end %}
 				</div>
 				<br>
-				<div id="limit-offset">
+				<div class="form-item">
 					<label for="limit">Limit:</label>
 					<input type="number" id="limit" name="limit">
-					<span id="offset-group">
-						<label for="offset">Offset:</label>
-						<input type="number" id="offset" name="offset" value="0">
-					</span>
+				</div>
+				<div id="offset-group" class="form-item">
+					<label for="offset">Offset:</label>
+					<input type="number" id="offset" name="offset" value="0">
 				</div>
 			</div>
 			{% end %}
@@ -163,14 +163,26 @@
 			"text": new Map(
 				[
 					["is", {"input": "text"}],
-					["starts with", {"input": "text"}],
-					["ends with", {"input": "text"}],
-					["contains", {"input": "text"}],
-					["is set", {"value": null},],
 					["is not", {"input": "text"}],
+					["starts with", {"input": "text"}],
 					["doesn't start with", {"input": "text"}],
+					["ends with", {"input": "text"}],
 					["doesn't end with", {"input": "text"}],
+					["contains", {"input": "text"}],
 					["doesn't contain", {"input": "text"}],
+					["is set", {"value": null},],
+					["isn't set", {"value": null}],
+				]
+			),
+			"date": new Map(
+				[
+					["<", {"input": "number"}],
+					["≤", {"input": "number"}],
+					["=", {"input": "number"}],
+					["≥", {"input": "number"}],
+					[">", {"input": "number"}],
+					["≠", {"input": "number"}],
+					["is set", {"value": null}],
 					["isn't set", {"value": null}],
 				]
 			),
@@ -187,15 +199,18 @@
 
 			let div = document.createElement("div");
 			div.id = base;
+			div.setAttribute("class", "filter-item")
 
 			let span = document.createElement("span");
 			span.id = base + "-settings";
 
 			let label = document.createElement("label");
+			label.setAttribute("class", "filter-component");
 			label.appendChild(document.createTextNode(index + ":"));
 			span.appendChild(label);
 
 			let select = document.createElement("select");
+			select.setAttribute("class", "filter-component");
 			select.id = base + "-parameter";
 			select.setAttribute("name", select.id);
 
@@ -212,6 +227,7 @@
 			div.appendChild(span);
 
 			button = document.createElement("button");
+			button.setAttribute("class", "filter-component");
 			button.appendChild(document.createTextNode("remove"));
 			button.setAttribute("type", "button");
 			button.setAttribute("onclick", "remove_filter('" + base + "')");
@@ -253,6 +269,7 @@
 				}
 
 				comparison = document.createElement("input");
+				comparison.setAttribute("class", "filter-component");
 				comparison.hidden = true;
 				comparison.id = base + "-comparison"
 				comparison.setAttribute("name", comparison.id);
@@ -260,6 +277,7 @@
 				settings = document.getElementById(base + "-settings");
 				settings.appendChild(comparison)
 				label = document.createElement("label")
+				label.setAttribute("class", "filter-component");
 				label.id = base + "-comparison-label"
 				label.appendChild(document.createTextNode("="))
 				settings.appendChild(label)
@@ -286,6 +304,7 @@
 				}
 
 				comparison = document.createElement("input");
+				comparison.setAttribute("class", "filter-component");
 				comparison.hidden = true;
 				comparison.id = base + "-comparison"
 				comparison.setAttribute("name", comparison.id);
@@ -304,6 +323,7 @@
 				settings.appendChild(textarea)
 			} else {
 				select = document.createElement("select");
+				select.setAttribute("class", "filter-component");
 				select.id = base + "-comparison";
 				select.setAttribute("name", select.id);
 				for ([value, info] of TYPES[type]) {
@@ -361,7 +381,6 @@
 			}
 		}
 
-		{% if order %}
 		function check_ordering() {
 			let hidden = false;
 			for (i = 1; i <= COLUMNS; i++) {
@@ -385,23 +404,10 @@
 			check_ordering();
 		}
 
-		function check_offset() {
-			document.getElementById("offset-group").hidden = !document.getElementById("limit").value;
-		}
-
-		function set_limit() {
-			document.getElementById("limit").setAttribute("onchange", "check_offset()");
-			check_offset();
-		}
-		{% end %}
-
 		function setup_js() {
 			document.getElementById("add-filter").hidden = false;
 			set_join_visibility();
-			{% if order %}
 			set_ordering();
-			set_limit();
-			{% end %}
 		}
 
 		window.addEventListener("DOMContentLoaded", setup_js);

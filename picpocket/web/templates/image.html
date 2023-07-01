@@ -17,10 +17,10 @@
         {% if image %}
         <h{{1 if image_ids is None else 2}}>{{image.title or f"Image {image.id}"}}</h{{1 if image_ids is None else 2}}>
 
-        <article>
+        <article class="contents">
             {% module DisplayImage(image) %}
 
-            <div class="image-info">
+            <div class="box image-info">
                 <div class="actions">
                     <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
                     <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
@@ -28,16 +28,16 @@
                 </div>
                 <dl>
                     <dt>Id:</dt>
-                  s  <dd>{{image.id}}</dd>
+                    <dd>{{image.id}}</dd>
 
                     <dt>Path:</dt>
                     {% if image.full_path %}
                     <dd>{{image.full_path}}</dd>
 
                     <dt>Location:</dt>
-                    <dd>{{image.location}}</dd>
+                    <dd>{{location_name or image.location}}</dd>
                     {% else %}
-                    <dd>{{image.location}}: {{image.path}}</dd>
+                    <dd>{{location_name or image.location}}: {{image.path}}</dd>
                     {% end %}
 
                     {% if image.creator %}

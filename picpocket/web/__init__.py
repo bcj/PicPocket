@@ -289,6 +289,7 @@ class BaseApiHandler(BaseHandler):
         query = ""
         forward = ""
         image = None
+        location_name = None
         if images:
             if isinstance(images[0], int):
                 # mypy doesn't trust the above isinstance check
@@ -299,6 +300,11 @@ class BaseApiHandler(BaseHandler):
                 images = cast(list[Image], images)
                 ids = [image.id for image in images]
                 image = images[0]
+
+            if image:
+                location = await self.api.get_location(image.location)
+                if location:
+                    location_name = location.name
 
             if len(ids) > 1:
                 session_id = await self.api.create_session({"ids": ids})
@@ -312,6 +318,7 @@ class BaseApiHandler(BaseHandler):
             action=action,
             image_ids=ids,
             image=image,
+            location_name=location_name,
             query=query,
             forward=forward,
         )
@@ -936,6 +943,11 @@ class ImagesGetHandler(BaseApiHandler):
         if image is None:
             raise HTTPError(404, f"Unknown image: {image_id}")
 
+        location_name = None
+        location = await self.api.get_location(image.location)
+        if location:
+            location_name = location.name
+
         back = forward = None
         query = ""
         try:
@@ -960,6 +972,7 @@ class ImagesGetHandler(BaseApiHandler):
             "image.html",
             image_ids=None,
             image=image,
+            location_name=location_name,
             back=back,
             forward=forward,
             query=query,
@@ -989,7 +1002,7 @@ class ImagesEditHandler(BaseApiHandler):
         if image is None:
             raise HTTPError(404, f"Unknown image: {image_id}")
 
-        known_tags= sorted(await self.api.all_tag_names())
+        known_tags = sorted(await self.api.all_tag_names())
 
         existing = image.serialize()
         if "tags" in existing:
@@ -1000,7 +1013,7 @@ class ImagesEditHandler(BaseApiHandler):
             self.endpoint,
             existing=existing,
             image=image,
-            known_tags=known_tags
+            known_tags=known_tags,
         )
 
     async def post(self, image_id):
@@ -1368,7 +1381,19 @@ class TasksAddHandler(BaseApiHandler):
 
 class TasksListHandler(BaseApiHandler):
     async def get(self):
-        self.render_web("task.html", tasks=await self.api.list_tasks())
+        tasks = await self.api.list_tasks()
+        location_names = {}
+
+        for task in tasks:
+            for location_id in (task.source, task.destination):
+                if location_id not in location_names:
+                    location = await self.api.get_location(location_id)
+                    if location:
+                        location_names[location_id] = location.name
+                    else:
+                        location_names[location_id] = location.name
+
+        self.render_web("task.html", tasks=tasks, location_names=location_names)
 
 
 class TasksRunHandler(BaseApiHandler):
@@ -1404,7 +1429,16 @@ class TasksGetHandler(BaseApiHandler):
         if task is None:
             raise HTTPError(404, f"Unknown task: {name}")
 
-        self.render_web("task.html", tasks=[task])
+        location_names = {}
+        for location_id in (task.source, task.destination):
+            if location_id not in location_names:
+                location = await self.api.get_location(location_id)
+                if location:
+                    location_names[location_id] = location.name
+                else:
+                    location_names[location_id] = location.name
+
+        self.render_web("task.html", tasks=[task], location_names=location_names)
 
 
 class TasksEditHandler(BaseApiHandler):

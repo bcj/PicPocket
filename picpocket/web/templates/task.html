@@ -34,10 +34,10 @@
                     {% end %}
 
                     <dt>Source:</dt>
-                    <dd>{{task.source}}</dd>
+                    <dd>{{location_names.get(task.source) or task.source}}</dd>
 
                     <dt>Destination:</dt>
-                    <dd>{{task.destination}}</dd>
+                    <dd>{{location_names.get(task.destination) or task.destination}}</dd>
 
                     {% if task.configuration %}
                     <dt>Configuration:</dt>

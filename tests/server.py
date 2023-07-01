@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from picpocket.web import DEFAULT_PORT, run_server
-from tests.conftest import IMAGE_FILES, _load_api
+from tests.conftest import _load_api
 
 
 def main():
@@ -18,7 +18,7 @@ async def temporary_server(port: int):
             directory = Path(dirname)
 
             await api.add_location("camera", source=True, removable=True)
-            main_id = await api.add_location("main", directory, destination=True)
+            await api.add_location("main", directory, destination=True)
             await api.add_tag("fake", "a fake tag")
             await api.add_tag("fake/child", "a fake child tag")
             await api.add_tag("fake/child/grandchild")

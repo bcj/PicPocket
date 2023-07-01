@@ -1,5 +1,5 @@
 {% if image and mime %}
-<div class="image">
+<div class="box image-holder">
     {% if mime.startswith("image/") %}
     <a href="{{reverse_url('images-file', image.id)}}" target="_blank"><img class="picpocket-image" src="{{reverse_url('images-file', image.id)}}" {% if image.alt %}alt="{{image.alt}}"{% end %}></a>
     {% else %}

@@ -179,7 +179,7 @@ def parse_image(soup: str | BeautifulSoup) -> dict[str, Any]:
     image = {}
 
     image["title"] = (soup.find("h2") or soup.find("h1")).text
-    tag = soup.find(class_="image")
+    tag = soup.find(class_="image-holder")
     img = tag.find("img")
     if img:
         image["image"] = img["src"]
@@ -223,13 +223,13 @@ def parse_image(soup: str | BeautifulSoup) -> dict[str, Any]:
                 case "Path:":
                     if ": " in tag.text:
                         found.add("Location: ")
-                        locationstr, pathstr = tag.text.split(": ")
-                        image["location"] = int(locationstr)
+                        location, pathstr = tag.text.split(": ")
+                        image["location"] = location
                         image["path"] = Path(pathstr)
                     else:
                         image["full_path"] = Path(tag.text)
                 case "Location:":
-                    image["location"] = int(tag.text)
+                    image["location"] = tag.text
                 case "Creator:":
                     image["creator"] = tag.text
                 case "Creation Date:":
@@ -331,9 +331,9 @@ def parse_tasks(contents: str) -> list[dict[str, Any]]:
                             case "Last Ran:":
                                 task["last-ran"] = item.text
                             case "Source:":
-                                task["source"] = int(item.text)
+                                task["source"] = item.text
                             case "Destination:":
-                                task["destination"] = int(item.text)
+                                task["destination"] = item.text
                             case "Configuration:":
                                 configuration = {}
                                 config_title = None
@@ -643,7 +643,6 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             allow_redirects=False,
         )
         assert response.status_code == 302
-        other_id = int(response.headers["Location"].rsplit("/", 1)[-1])
 
         for path in image_files:
             shutil.copy2(path, main)
@@ -654,7 +653,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
                 "batch_size": 100,
                 "file_formats": "",
                 "creator": "bcj",
-                "tags": "tag\nnested/tag\nnested/too\n\n",
+                "tags": ["tag", "nested/tag", "nested/too"],
             },
         )
         assert response.status_code == 200
@@ -682,7 +681,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             assert image["title"] == f"Image {image['id']}"
             assert image["full_path"].parent == main
             names.add(image["full_path"].name)
-            assert image["location"] == main_id
+            assert image["location"] == "main"
             assert image["creator"] == "bcj"
             datetime.strptime(image["creation_date"], "%Y-%m-%d %H:%M:%S")
             datetime.strptime(image["last_modified"], "%Y-%m-%d %H:%M:%S")
@@ -748,14 +747,14 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             "creator",
             "existing-tags",
             "rating",
-            "tags",
+            "tags-list",
             "title",
         }
         assert inputs["alt"] == {"type": "text", "value": None}
         assert inputs["caption"] == {"type": "text", "value": None}
         assert inputs["creator"] == {"type": "text", "value": "bcj"}
         assert inputs["existing-tags"]["type"] == "text"
-        assert set(inputs["tags"]["value"].splitlines()) == {
+        assert set(inputs["tags-list"]["value"].splitlines()) == {
             "tag",
             "nested/tag",
             "nested/too",
@@ -775,7 +774,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
                 "caption": "a pithy description",
                 "title": "My good image",
                 "existing-tags": inputs["existing-tags"]["value"],
-                "tags": "new\nnested/tag\nalso/new",
+                "tags-list": "new\nnested/tag\nalso/new",
                 "rating": 5,
                 "creator": "me",
             },
@@ -846,7 +845,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         assert moved_image.keys() == new_image.keys()
         for key, value in moved_image.items():
             if key == "location":
-                assert value == other_id
+                assert value == "other"
             elif key == "full_path":
                 assert value == moved_path
             else:
@@ -1532,10 +1531,8 @@ async def test_tasks(run_web, tmp_path, image_files):
                 "description": "my main image storage",
                 "type": "Destination",
             },
-            allow_redirects=False,
         )
-        assert response.status_code == 302
-        main_id = int(response.headers["Location"].rsplit("/", 1)[-1])
+        assert response.status_code == 200
 
         camera = tmp_path / "camera"
         camera.mkdir()
@@ -1548,10 +1545,8 @@ async def test_tasks(run_web, tmp_path, image_files):
                 "description": "my camera",
                 "type": "Source",
             },
-            allow_redirects=False,
         )
-        assert response.status_code == 302
-        camera_id = int(response.headers["Location"].rsplit("/", 1)[-1])
+        assert response.status_code == 200
 
         response = requests.post(
             f"{base}{location_endpoints['add']}",
@@ -1636,8 +1631,8 @@ async def test_tasks(run_web, tmp_path, image_files):
         }
         assert task["name"] == "minimal"
         assert task["actions"].keys() == {"Run", "Edit", "Remove"}
-        assert task["source"] == camera_id
-        assert task["destination"] == main_id
+        assert task["source"] == "camera"
+        assert task["destination"] == "main"
         assert not task.get("configuration")
 
         response = requests.post(
@@ -1671,8 +1666,8 @@ async def test_tasks(run_web, tmp_path, image_files):
         assert task["name"] == "real-task"
         assert task["description"] == "my more-complicated task"
         assert task["actions"].keys() == {"Run", "Edit", "Remove"}
-        assert task["source"] == camera_id
-        assert task["destination"] == main_id
+        assert task["source"] == "camera"
+        assert task["destination"] == "main"
         assert task["configuration"] == {
             "creator": "bcj",
             "formats": [".JPG"],
@@ -1769,8 +1764,8 @@ async def test_tasks(run_web, tmp_path, image_files):
 
         assert task["name"] == "minimal"
         assert task["actions"].keys() == {"Run", "Edit", "Remove"}
-        assert task["source"] == camera_id
-        assert task["destination"] == main_id
+        assert task["source"] == "camera"
+        assert task["destination"] == "main"
         assert task["configuration"] == {
             "creator": "somebody",
             "tags": ["hi/hello", "another/tag"],
@@ -1799,8 +1794,8 @@ async def test_tasks(run_web, tmp_path, image_files):
         assert task["name"] == "real-task"
         assert not task.get("description")
         assert task["actions"].keys() == {"Run", "Edit", "Remove"}
-        assert task["source"] == camera_id
-        assert task["destination"] == main_id
+        assert task["source"] == "camera"
+        assert task["destination"] == "main"
         assert task["configuration"] == {
             "creator": "somebody else",
             "formats": [".jpeg", ".png"],
