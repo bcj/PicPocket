@@ -79,7 +79,7 @@ def image_info(
 
     image = None
     try:
-        if path.suffix in PILLOW_FORMATS:
+        if path.suffix.lower() in PILLOW_FORMATS:
             image = Image.open(path)
     except Exception:
         if logger:
@@ -120,7 +120,7 @@ def image_info(
 
                         if isinstance(value, bytes):
                             if logger:
-                                logger.debug(
+                                logger.info(
                                     "Skipping exif tag with bytes value %s",
                                     tag if tag else f"tag #{tag_number}",
                                 )
@@ -132,7 +132,7 @@ def image_info(
                             json.dumps(value)
                         except Exception:
                             if logger:
-                                logger.debug(
+                                logger.exception(
                                     "Skipping exif tag with unserializable value: %s",
                                     tag if tag else f"tag #{tag_number}",
                                 )
@@ -141,7 +141,7 @@ def image_info(
                         exif[tag] = value
                     except Exception:
                         if logger:
-                            logger.debug(
+                            logger.exception(
                                 "Couldn't parse exif tag %s for file %s",
                                 tag if tag else f"tag #{tag_number}",
                                 path,

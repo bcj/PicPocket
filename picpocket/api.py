@@ -602,7 +602,11 @@ class PicPocket(Protocol):
         """
 
     async def verify_image_files(
-        self, *, location: Optional[int] = None, path: Optional[Path] = None
+        self,
+        *,
+        location: Optional[int] = None,
+        path: Optional[Path] = None,
+        reparse_exif: bool = False,
     ) -> list[Image]:
         """Check that images in PicPocket exist on-disk
 
@@ -616,7 +620,9 @@ class PicPocket(Protocol):
 
         Args:
             location: Only check images in this location
-            path Only scan images within this directory
+            path: Only scan images within this directory
+            reparse_exif: Reread EXIF data even if the image hasn't been
+                touched
 
         Returns:
             All images that exist in PicPocket that can't be found

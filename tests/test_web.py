@@ -941,6 +941,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
                 "value": "any",
                 "options": ["any", "main", "other"],
             },
+            "exif": {"type": "checkbox", "value": False},
         }
 
         response = requests.post(f"{base}{endpoints['verify']}")

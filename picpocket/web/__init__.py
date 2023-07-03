@@ -926,8 +926,14 @@ class ImagesVerifyHandler(BaseApiHandler):
 
             location_id = location.id
 
+        reparse_exif = self.get_body_argument("exif", "off") == "on"
+
         try:
-            images = await self.api.verify_image_files(location=location_id, path=path)
+            images = await self.api.verify_image_files(
+                location=location_id,
+                path=path,
+                reparse_exif=reparse_exif,
+            )
         except Exception:
             raise HTTPError(400, "Verifying images failed ")
 
@@ -1890,6 +1896,15 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                     "required": False,
                     "input": "text",
                     "label": "Path:",
+                },
+                {
+                    "name": "exif",
+                    "description": (
+                        "Update EXIF info even if images haven't been modified."
+                    ),
+                    "required": False,
+                    "input": "checkbox",
+                    "label": "Reparse EXIF:",
                 },
             ],
         ),

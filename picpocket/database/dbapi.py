@@ -2281,7 +2281,11 @@ class DbApi(PicPocket, ABC):
         return None
 
     async def verify_image_files(
-        self, *, location: Optional[int] = None, path: Optional[Path] = None
+        self,
+        *,
+        location: Optional[int] = None,
+        path: Optional[Path] = None,
+        reparse_exif: bool = False,
     ) -> list[Image]:
         search_locations = {}
 
@@ -2405,14 +2409,14 @@ class DbApi(PicPocket, ABC):
                             last_modified = mtime
 
                         # no point in checking for other changes if not modified
-                        if last_modified != image.last_modified:
+                        if last_modified != image.last_modified or reparse_exif:
                             values = {"last_modified": last_modified}
 
                             hashed = hash_image(image_path)
                             old_hash = image.hash
 
                             # no point loading image if same hash
-                            if hashed != old_hash:
+                            if hashed != old_hash or reparse_exif:
                                 values["hash"] = hashed
 
                                 (

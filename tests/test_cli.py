@@ -1137,6 +1137,7 @@ def test_build_images(create_parser):
         subcommand="verify",
         location=None,
         path=None,
+        exif=False,
         mounts=None,
         output=Output.FULL,
     )
@@ -1151,6 +1152,7 @@ def test_build_images(create_parser):
             "1",
             "/Volumes",
             "--json",
+            "--exif",
         ]
     )
     assert args == Namespace(
@@ -1158,6 +1160,7 @@ def test_build_images(create_parser):
         subcommand="verify",
         location=1,
         path=None,
+        exif=True,
         mounts=[["1", "/Volumes"]],
         output=Output.JSON,
     )
@@ -1178,6 +1181,7 @@ def test_build_images(create_parser):
         subcommand="verify",
         location="main",
         path=Path.home(),
+        exif=False,
         mounts=None,
         output=Output.QUIET,
     )
@@ -3224,6 +3228,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
                 subcommand="verify",
                 location=None,
                 path=None,
+                exif=False,
                 mounts=None,
                 output=Output.QUIET,
             ),
@@ -3239,6 +3244,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
                 subcommand="verify",
                 location=portable_id,
                 path=None,
+                exif=True,
                 mounts=[["portable", str(portable)]],
                 output=Output.JSON,
             ),
@@ -3253,6 +3259,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
                 subcommand="verify",
                 location=portable_id,
                 path=None,
+                exif=False,
                 mounts=[["portable", str(portable)]],
                 output=Output.FULL,
             ),
@@ -3268,6 +3275,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
                 subcommand="verify",
                 location=portable_id,
                 path=tmp_path / "portable" / "fake-subdirectory",
+                exif=False,
                 mounts=[["portable", str(portable)]],
                 output=Output.FULL,
             ),

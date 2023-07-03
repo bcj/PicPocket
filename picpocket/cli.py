@@ -1293,6 +1293,11 @@ def build_images(action) -> list[ArgumentParser]:
         "--path", type=full_path, help="Only check files within this directory"
     )
     verify.add_argument(
+        "--exif",
+        action="store_true",
+        help="reparse EXIF on all images",
+    )
+    verify.add_argument(
         "--mount",
         dest="mounts",
         nargs=2,
@@ -1527,7 +1532,7 @@ async def run_image(picpocket: PicPocket, args: Namespace, print=print):
 
             try:
                 images = await picpocket.verify_image_files(
-                    location=args.location, path=args.path
+                    location=args.location, path=args.path, reparse_exif=args.exif
                 )
 
                 match args.output:
