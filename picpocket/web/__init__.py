@@ -1591,7 +1591,7 @@ class ImageDisplayHandler(UIModule):
 class TagDisplayHandler(UIModule):
     """A Picpocket tag and children"""
 
-    def render(self, tags: dicts[str, dict], parent: Optional[str] = None):
+    def render(self, tags: dict[str, dict], parent: Optional[str] = None):
         return self.render_string(
             "modules/tags.html",
             tags=tags,
@@ -1979,8 +1979,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "name",
                     "description": (
-                        "What to call your location. "
-                        "Location names must be unique."
+                        "What to call your location. Location names must be unique."
                     ),
                     "required": True,
                     "input": "text",
@@ -2499,7 +2498,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
             "Remove Task",
             "Delete a task.",
             handler=TasksRemoveHandler,
-            submit="Remove"
+            submit="Remove",
         ),
     },
 }

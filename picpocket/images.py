@@ -107,7 +107,7 @@ def image_info(
                                 if isinstance(value, bytes):
                                     try:
                                         value = value.decode()
-                                    except:
+                                    except Exception:
                                         value = None
 
                                 if value:
@@ -122,7 +122,7 @@ def image_info(
                                 if isinstance(value, bytes):
                                     try:
                                         value = value.decode()
-                                    except:
+                                    except Exception:
                                         value = None
 
                                 if value:
