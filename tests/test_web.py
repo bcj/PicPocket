@@ -197,7 +197,12 @@ def parse_image(soup: str | BeautifulSoup) -> dict[str, Any]:
     actions = div.find(class_="actions")
     image["actions"] = {}
     for link in actions.find_all("a"):
-        image["actions"][link.text] = link["href"]
+        if "previous" in link.text.lower():
+            image["previous"] = link["href"]
+        elif "next" in link.text.lower():
+            image["next"] = link["href"]
+        else:
+            image["actions"][link.text] = link["href"]
 
     name = None
     found = set()
@@ -244,30 +249,22 @@ def parse_image(soup: str | BeautifulSoup) -> dict[str, Any]:
                     image["tags"] = {}
                     for link in tag.find_all("a"):
                         image["tags"][link.text] = link["href"]
-                case "EXIF Data:":
-                    image["exif"] = {}
-                    key = None
-                    for column in tag.find_all("td"):
-                        if key is None:
-                            key = column.text
-                        else:
-                            image["exif"][key] = column.text
-                            key = None
-                    assert key is None
                 case _:
                     raise ValueError(f"Unknown attribute: {name}")
             name = None
     assert name is None
 
-    navigation = soup.find("div", class_="navigation")
-    if navigation:
-        for link in navigation.find_all("a"):
-            if "previous" in link.text.lower():
-                image["previous"] = link["href"]
-            elif "next" in link.text.lower():
-                image["next"] = link["href"]
+    table = soup.find("table")
+    if table:
+        image["exif"] = {}
+        key = None
+        for column in table.find_all("td"):
+            if key is None:
+                key = column.text
             else:
-                raise ValueError(f"Unknown link direction: {link.text}")
+                image["exif"][key] = column.text
+                key = None
+        assert key is None
 
     return image
 
