@@ -77,21 +77,19 @@
                         </ul>
                     </dd>
                     {% end %}
-
-                    {% if image.exif %}
-                    <dt>EXIF Data:</dt>
-                    <dd>
-                        <table>
-                            <tr><th colspan=2>Exif Data</th></tr>
-                            <tr><th>Key</th><th>Value</th></tr>
-                            {% for key, value in image.exif.items() %}
-                            <tr><td>{{key}}</td><td>{{value}}</td></tr>
-                            {% end %}
-                        </table>
-                    </dd>
-                    {% end %}
                 </dl>
             </div>
+            {% if image.exif %}
+            <div class="box image-info">
+                <table>
+                    <tr><th colspan=2>Exif Data</th></tr>
+                    <tr><th>Key</th><th>Value</th></tr>
+                    {% for key, value in image.exif.items() %}
+                    <tr><td>{{key}}</td><td>{{value}}</td></tr>
+                    {% end %}
+                </table>
+            </div>
+            {% end %}
         </article>
         {% end %}
     </main>

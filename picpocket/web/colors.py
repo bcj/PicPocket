@@ -27,7 +27,7 @@ DARK = ColorScheme(
     background="#424C55",
     text="#E7E9EE",
     accent="#E9B872",
-    accent_text="#black",
+    accent_text="black",
     border="#E7E9EE",
     secondary="#232A2E",
 )

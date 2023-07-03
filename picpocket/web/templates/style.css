@@ -78,6 +78,10 @@ tr:nth-child(even) {
     background-color: var(--secondary-color);
 }
 
+tr:nth-child(odd) {
+    background-color: var(--background-color);
+}
+
 th {
     background-color: var(--accent-color);
     color: var(--accent-text-color);
@@ -100,7 +104,7 @@ th {
 
 .image-info {
     padding: 1em;
-    max-width: 400px;
+    max-width: 600px;
 }
 
 img {
@@ -112,7 +116,7 @@ img {
 .main-form {
     padding: 1em;
     min-width: 100px;
-    max-width: 400px;
+    max-width: 600px;
 }
 
 .search-form {
