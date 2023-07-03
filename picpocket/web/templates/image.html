@@ -21,10 +21,12 @@
             {% module DisplayImage(image) %}
 
             <div class="box image-info">
-                <div class="actions">
+                <div class="actions image-actions">
+                    {% if back %}<a href="{{back}}{{query}}">← Previous</a>{% end %}
                     <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
                     <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
                     <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
+                    {% if forward %}<a href="{{forward}}{{query}}">Next →</a>{% end %}
                 </div>
                 <dl>
                     <dt>Id:</dt>
@@ -90,12 +92,6 @@
                     {% end %}
                 </dl>
             </div>
-
-            {% if back or forward %}
-            <div class="navigation">
-                {% if back %}<a href="{{back}}{{query}}">← previous</a>{% if forward %} | {% end %}{% end %}{% if forward %}<a href="{{forward}}{{query}}">next →</a>{% end %}
-            </div>
-            {% end %}
         </article>
         {% end %}
     </main>

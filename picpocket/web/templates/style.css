@@ -84,6 +84,7 @@ th {
 }
 
 .contents {
+    background-color: var(--secondary-color);
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
@@ -98,7 +99,6 @@ th {
 }
 
 .image-info {
-    background-color: var(--secondary-color);
     padding: 1em;
     max-width: 400px;
 }
@@ -110,14 +110,12 @@ img {
 }
 
 .main-form {
-    background-color: var(--secondary-color);
     padding: 1em;
     min-width: 100px;
     max-width: 400px;
 }
 
 .search-form {
-    background-color: var(--secondary-color);
     padding: 1em;
     min-width: 400px;
     max-width: 800px;
@@ -150,6 +148,15 @@ img {
 
 .add-text {
     flex-grow: 100;
+}
+
+.image-actions > a {
+    margin-left: 1em;
+    margin-right: 0em;
+}
+
+.image-actions > a:first-of-type {
+    margin-left: 0em;
 }
 
 input:invalid:required ~ .go-action {
