@@ -166,3 +166,7 @@ img {
 input:invalid:required ~ .go-action {
     visibility: hidden;
 }
+
+p {
+    max-width: 1000px;
+}

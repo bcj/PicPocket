@@ -20,7 +20,7 @@
                 {% if parameters %}{% set existing_tags = {} %}
                 {% for field in parameters %}
                 <div class="form-item" id="item-{{field['name']}}">
-                    <label for="{{field['name']}}">{{field["label"]}}</label>
+                    <label for="{{field['name']}}" title="{{field['description']}}">{{field["label"]}}</label>
                     {% if field['input'] == "select" %}
                     <select name="{{field['name']}}" title="{{field['description']}}">
                     {% for option in (options.get(field['name']) or field['options']) %}

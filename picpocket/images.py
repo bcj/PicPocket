@@ -106,12 +106,14 @@ def image_info(
                             case "Artist":
                                 if isinstance(value, bytes):
                                     try:
-                                        value = value.decode().strip("\x00")
+                                        value = value.decode()
                                     except:
                                         value = None
 
                                 if value:
-                                    creator = value
+                                    value = value.strip("\x00").strip() or None
+
+                                creator = value
                             case "DateTimeOriginal" | "DateTimeDigitized":
                                 creation_date = parse_exif_date(value)
                             case "DateTime" if creation_date is None:
@@ -119,12 +121,14 @@ def image_info(
                             case "ImageDescription":
                                 if isinstance(value, bytes):
                                     try:
-                                        value = value.decode().strip("\x00")
+                                        value = value.decode()
                                     except:
                                         value = None
 
                                 if value:
-                                    description = value
+                                    value = value.strip("\x00").strip() or None
+
+                                description = value
                             case "ExifOffset":
                                 continue
                             case "ExifVersion" | "FlashPixVersion":

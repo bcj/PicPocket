@@ -340,7 +340,7 @@ class ApiRootHandler(BaseHandler):
         self.render_web(
             "index.html",
             title="PicPocket",
-            description="A place to manage your images",
+            description="A place for your photos",
             endpoints=NAVBAR,
             actions=None,
         )
@@ -351,7 +351,7 @@ class LocationsHandler(BaseHandler):
         self.render_web(
             "index.html",
             title="Locations",
-            description="Places to store/import images from",
+            description="Places to store images & places to import images from",
             endpoints=ENDPOINTS["locations"],
             actions=ACTIONS["locations"],
             id_name="{id}",
@@ -1178,7 +1178,17 @@ class TagsHandler(BaseHandler):
         self.render_web(
             "index.html",
             title="Tags",
-            description="Tags in PicPocket",
+            description=(
+                "Labels applied to images in PicPocket that can be used to "
+                "categorize and sort images. Tags in PicPocket are hierarchical: "
+                "'plants/flowers' is a subcategory of 'plants', and "
+                "'plants/flowers/Hyacinth' is a subcategory of both of them. "
+                "When searching for images based on tags, any more-specific "
+                "tags will be included as well. When tagging images, you do "
+                "not need to include any broader-category tags (i.e., if "
+                "you tag an image 'plants/flowers/Hyacinth', it is unnecessary "
+                "to tag it 'plants' or 'plants/flowers')."
+            ),
             endpoints=ENDPOINTS["tags"],
             actions=None,
             id_name="{tag}",
@@ -1204,7 +1214,7 @@ class TagsAddHandler(BaseApiHandler):
 
 class TagsListHandler(BaseApiHandler):
     async def get(self):
-        self.render_web("tags.html", tags=await self.api.all_tag_names())
+        self.render_web("tags.html", tags=await self.api.all_tags())
 
 
 class TagsGetHandler(BaseApiHandler):
@@ -1325,7 +1335,12 @@ class TasksHandler(BaseHandler):
         self.render_web(
             "index.html",
             title="Tasks",
-            description="File Sync Jobs",
+            description=(
+                "preconfigured jobs for importing images from your "
+                "devices to the places you store them. "
+                "Tasks can automatically apply information to the images "
+                "they copy."
+            ),
             endpoints=ENDPOINTS["tasks"],
             actions=ACTIONS["tasks"],
             id_name="{name}",
@@ -1409,7 +1424,11 @@ class TasksRunHandler(BaseApiHandler):
         if task is None:
             raise HTTPError(404, f"Unknown task: {name}")
 
-        self.write_form("form.html", self.endpoint)
+        existing = {}
+        if task.last_ran:
+            existing["since"] = task.last_ran.strftime("%Y-%m-%dT%H:%M")
+
+        self.write_form("form.html", self.endpoint, existing=existing)
 
     async def post(self, name):
         since = None
@@ -1569,6 +1588,17 @@ class ImageDisplayHandler(UIModule):
         )
 
 
+class TagDisplayHandler(UIModule):
+    """A Picpocket tag and children"""
+
+    def render(self, tags: dicts[str, dict], parent: Optional[str] = None):
+        return self.render_string(
+            "modules/tags.html",
+            tags=tags,
+            parent=parent,
+        )
+
+
 NAVBAR = {
     "home": Endpoint(
         f"{URL_BASE}",
@@ -1580,9 +1610,8 @@ NAVBAR = {
         f"{URL_BASE}/locations",
         "Image Sources & Destinations",
         (
-            "Locations represent sources that images may beimported "
-            "from (e.g., your camera), and destinations that you may "
-            "store images on (e.g., your pictures directory)."
+            "Sources you can import images from (e.g., your camera), "
+            "and destinations you store images (e.g., your Pictures directory)."
         ),
         handler=LocationsHandler,
     ),
@@ -1590,8 +1619,8 @@ NAVBAR = {
         f"{URL_BASE}/images",
         "Your Images",
         (
-            "Add or update information and tags related to your images "
-            "and search through your images based on supplied criteria."
+            "Search through and view your images, tag them, and add "
+            "metadata that makes them easier to find and categorize."
         ),
         handler=ImagesHandler,
     ),
@@ -1599,18 +1628,20 @@ NAVBAR = {
         f"{URL_BASE}/tags",
         "Image Tags",
         (
-            "Look through tags that have been applied to images in "
-            "your collection, and add/update descriptions of those tags"
+            "Browse the tags you've applied to the images in your collection, "
+            "Add/update tag descriptions, or move tags to keep them better "
+            "organized."
         ),
         handler=TagsHandler,
     ),
     "tasks": Endpoint(
         f"{URL_BASE}/tasks",
-        "Import Tasks",
+        "Import Images",
         (
-            "Tasks represents preconfigured jobs for copying images "
-            "from source locations to destination locations, "
-            "automatically applying tags as desired."
+            "preconfigured jobs for importing images from your "
+            "devices to the places you store them. "
+            "Tasks can automatically apply information to the images "
+            "they copy."
         ),
         handler=TasksHandler,
     ),
@@ -1632,8 +1663,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "name",
                     "description": (
-                        "The name of the location. Location names must be "
-                        "globally unique."
+                        "What to call your location. Location names must be unique."
                     ),
                     "required": True,
                     "input": "text",
@@ -1641,7 +1671,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "description",
-                    "description": "A description of the location",
+                    "description": "A brief explanation of what the location is",
                     "required": False,
                     "input": "textarea",
                     "label": "Description:",
@@ -1649,11 +1679,11 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "path",
                     "description": (
-                        "The path to the root of the location. The path "
-                        "should be left if the location isn't mounted to a "
-                        "consistent location, or it mounts to a non-unique "
-                        "location. Must be supplied if the location isn't "
-                        "removable. "
+                        "Where the location is on your computer. "
+                        "This should be left blank if the location isn't "
+                        "mounted in a consistent location, or if multiple "
+                        "devices share this path. This must be supplied if "
+                        "the location isn't removable."
                     ),
                     "required": False,
                     "input": "text",
@@ -1662,10 +1692,9 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "type",
                     "description": (
-                        "Whether the location is one that images are "
-                        "imported from (e.g., a camera) or one images "
-                        "are copied to and stored (e.g., your Pictures "
-                        "directory)."
+                        "A source is a location images are imported from "
+                        "(e.g., a camera) or a destination that images are "
+                        "copied to (e.g., your Pictures directory). "
                     ),
                     "required": True,
                     "input": "select",
@@ -1688,15 +1717,15 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
         "list": Endpoint(
             f"{NAVBAR['locations'].path}/list",
             "List Locatoins",
-            "Get all locations in PicPocket",
+            "See the locations PicPocket knows about.",
             handler=LocationsListHandler,
         ),
     },
     "images": {
         "search": Endpoint(
             f"{NAVBAR['images'].path}/search",
-            "Search images in PicPocket",
-            "Get all images that match a filter",
+            "Search Images",
+            "Find images stored in PicPocket",
             handler=ImagesSearchHandler,
             submit="Search",
             parameters=[
@@ -1728,25 +1757,22 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                     "required": False,
                     "type": "order",
                     "options": [
-                        "name",
-                        "extension",
-                        "creator",
-                        "location",
-                        "path",
-                        "title",
-                        "caption",
-                        "alt",
-                        "rating",
-                        "creation_date",
-                        "last_modified",
+                        ["Name", "name"],
+                        ["Extension", "extension"],
+                        ["Creator", "creator"],
+                        ["Location", "location"],
+                        ["Path", "path"],
+                        ["Title", "title"],
+                        ["Caption", "caption"],
+                        ["Alt", "alt"],
+                        ["Rating", "rating"],
+                        ["Creation Date", "creation_date"],
+                        ["Last-Modified Date", "last_modified"],
                     ],
                 },
                 {
                     "name": "reachable",
-                    "description": (
-                        "Whether returned images "
-                        "should be on currently-attatched locations."
-                    ),
+                    "description": "Whether the image file is currently accessible",
                     "required": False,
                     "type": "select",
                     "input": "select",
@@ -1755,7 +1781,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "tagged",
-                    "description": "Whether returned images should have tags.",
+                    "description": "Whether the image has been tagged.",
                     "required": False,
                     "type": "select",
                     "input": "select",
@@ -1772,7 +1798,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "all_tags",
-                    "description": "Only return images with all required tags",
+                    "description": "Only return images with all supplied tags",
                     "required": False,
                     "type": "text",
                     "input": "textarea",
@@ -1780,7 +1806,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "no_tags",
-                    "description": "Only return images without any matching tags.",
+                    "description": "Only return images without any supplied tags",
                     "required": False,
                     "type": "text",
                     "input": "textarea",
@@ -1804,7 +1830,9 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "path",
-                    "description": "Where to save the image (relative to location)",
+                    "description": (
+                        "Where to save the image copy (relative to location)"
+                    ),
                     "required": False,
                     "input": "text",
                     "label": "Path:",
@@ -1853,7 +1881,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "tags",
-                    "description": "Tags to apply to all imported images.",
+                    "description": "Tags to apply to the image.",
                     "required": False,
                     "input": "tags",
                     "label": "Tags:",
@@ -1869,7 +1897,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             parameters=[
                 {
                     "name": "path",
-                    "description": "The path to the image.",
+                    "description": "The full path to the image.",
                     "required": True,
                     "input": "text",
                     "label": "Path:",
@@ -1900,7 +1928,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "exif",
                     "description": (
-                        "Update EXIF info even if images haven't been modified."
+                        "Update EXIF data info even if images haven't been modified."
                     ),
                     "required": False,
                     "input": "checkbox",
@@ -1950,14 +1978,17 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             parameters=[
                 {
                     "name": "name",
-                    "description": "The name of the task",
+                    "description": (
+                        "What to call your location. "
+                        "Location names must be unique."
+                    ),
                     "required": True,
                     "input": "text",
                     "label": "Name:",
                 },
                 {
                     "name": "source",
-                    "description": "Where to fetch images from",
+                    "description": "Where to copy images from",
                     "required": True,
                     "input": "select",
                     "label": "Source:",
@@ -1971,7 +2002,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "description",
-                    "description": "A description of the task",
+                    "description": "An explanation of what the task does",
                     "required": False,
                     "input": "textarea",
                     "label": "Description:",
@@ -1985,7 +2016,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "tags",
-                    "description": "What to tag imorted images",
+                    "description": "What tags to apply to imported images",
                     "required": False,
                     "input": "textarea",
                     "label": "Tags:",
@@ -2016,7 +2047,7 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
         "list": Endpoint(
             f"{NAVBAR['tasks'].path}/list",
             "List Tasks",
-            "List all tasks",
+            "List all tasks.",
             handler=TasksListHandler,
         ),
     },
@@ -2034,13 +2065,13 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "mount": Endpoint(
             f"{URL_BASE}/location/{{id}}/mount",
             "Mount Location",
-            "Set the current path of the location.",
+            "Set the current path to a location.",
             handler=LocationsMountHandler,
             submit="Mount",
             parameters=[
                 {
                     "name": "path",
-                    "description": "Where the location is currently mounted",
+                    "description": "Where the location should be mounted",
                     "required": True,
                     "input": "text",
                     "label": "Path:",
@@ -2058,13 +2089,18 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "import": Endpoint(
             f"{URL_BASE}/location/{{id}}/import",
             "Import Location",
-            "Import files in place from a destination.",
+            (
+                "Add images stored in a destination to PicPocket. "
+                "Your image files will not be moved. "
+                "This action may take a while and will not give any feedback "
+                "until it is complete."
+            ),
             handler=LocationsImportHandler,
             submit="Import",
             parameters=[
                 {
                     "name": "creator",
-                    "description": "Who created the images being imported",
+                    "description": "Who made the images being imported",
                     "required": False,
                     "input": "text",
                     "label": "Creator:",
@@ -2078,7 +2114,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "batch_size",
-                    "description": "How often to commit when importing images",
+                    "description": "Have PicPocket save changes after this many images",
                     "required": False,
                     "input": "text",
                     "label": "Batch Size:",
@@ -2105,8 +2141,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "new_name",
                     "description": (
-                        "The name of the location. Location names must be "
-                        "globally unique."
+                        "What to call your location. Location names must be unique."
                     ),
                     "required": False,
                     "input": "text",
@@ -2114,7 +2149,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                 },
                 {
                     "name": "description",
-                    "description": "A description of the location",
+                    "description": "A brief explanation of what the location is",
                     "required": False,
                     "input": "textarea",
                     "label": "Description:",
@@ -2122,11 +2157,11 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "path",
                     "description": (
-                        "The path to the root of the location. The path "
-                        "should be left if the location isn't mounted to a "
-                        "consistent location, or it mounts to a non-unique "
-                        "location. Must be supplied if the location isn't "
-                        "removable. "
+                        "Where the location is on your computer. "
+                        "This should be left blank if the location isn't "
+                        "mounted in a consistent location, or if multiple "
+                        "devices share this path. This must be supplied if "
+                        "the location isn't removable."
                     ),
                     "required": False,
                     "input": "text",
@@ -2135,10 +2170,9 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                 {
                     "name": "type",
                     "description": (
-                        "Whether the location is one that images are "
-                        "imported from (e.g., a camera) or one images "
-                        "are copied to and stored (e.g., your Pictures "
-                        "directory)."
+                        "A source is a location images are imported from "
+                        "(e.g., a camera) or a destination that images are "
+                        "copied to (e.g., your Pictures directory). "
                     ),
                     "required": True,
                     "input": "select",
@@ -2160,20 +2194,19 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "remove": Endpoint(
             f"{URL_BASE}/location/{{id}}/remove",
             "Remove Location",
-            "Remove an existing location.",
+            "Remove a location from PicPocket (your files will not be touched).",
             handler=LocationsRemoveHandler,
             submit="Remove",
             parameters=[
                 {
                     "name": "force",
                     "description": (
-                        "Remove the location even if there are images "
-                        "associated with it. Image files will not be "
-                        "deleted on disk"
+                        "Remove the location even if images exist at this "
+                        "location in PicPocket. Image files will not be touched."
                     ),
                     "required": False,
                     "input": "checkbox",
-                    "label": "Force (will remove associated images):",
+                    "label": "Force (remove associated images from PicPocket):",
                 },
             ],
         ),
@@ -2182,7 +2215,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "get": Endpoint(
             f"{URL_BASE}/image/{{id}}",
             "Get Image",
-            "Get information about an existing image.",
+            "View an image and its information.",
             handler=ImagesGetHandler,
         ),
         "edit": Endpoint(
@@ -2246,20 +2279,20 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "move": Endpoint(
             f"{URL_BASE}/image/{{id}}/move",
             "Move Image",
-            "Move an image file on-disk",
+            "Move an image file.",
             handler=ImagesMoveHandler,
             submit="Move",
             parameters=[
                 {
                     "name": "path",
-                    "description": "The path (relative to the location)",
+                    "description": "The path (relative to the new location)",
                     "required": True,
                     "input": "text",
                     "label": "Path:",
                 },
                 {
                     "name": "location",
-                    "description": "The name or id of the location",
+                    "description": "The location to move the image to",
                     "required": True,
                     "input": "select",
                     "label": "Location:",
@@ -2269,7 +2302,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "remove": Endpoint(
             f"{URL_BASE}/image/{{id}}/remove",
             "Remove Image",
-            "Remove an image from PicPocket",
+            "Remove an image from PicPocket.",
             handler=ImagesRemoveHandler,
             submit="Remove",
             parameters=[
@@ -2285,7 +2318,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "file": Endpoint(
             f"{URL_BASE}/file/{{id}}",
             "Get Image File",
-            "Get the actual image file.",
+            "View an image file.",
             handler=ImagesFileHandler,
         ),
     },
@@ -2368,7 +2401,15 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "run": Endpoint(
             f"{URL_BASE}/task/{{name}}/run",
             "Run Task",
-            "Run an import task",
+            (
+                "Run an import task. "
+                "Import tasks will copy matching images "
+                "from the source to the destination "
+                "(without modifying the source location), "
+                "adding metadata as required. By default, import tasks "
+                "will only look for images created since the last time "
+                "they ran."
+            ),
             handler=TasksRunHandler,
             submit="run",
             parameters=[
@@ -2377,7 +2418,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                     "description": "Only import images since this date",
                     "required": False,
                     "input": "datetime-local",
-                    "label": "Source:",
+                    "label": "Since:",
                 },
                 {
                     "name": "full",
@@ -2391,13 +2432,13 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "edit": Endpoint(
             f"{URL_BASE}/task/{{name}}/edit",
             "Edit Task",
-            "Edit an import task",
+            "Edit a task",
             handler=TasksEditHandler,
             submit="Edit",
             parameters=[
                 {
                     "name": "source",
-                    "description": "Where to fetch images from",
+                    "description": "Where to copy images from",
                     "required": True,
                     "input": "select",
                     "label": "Source:",
@@ -2456,8 +2497,9 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
         "remove": Endpoint(
             f"{URL_BASE}/task/{{name}}/remove",
             "Remove Task",
-            "Remove an existing task.",
+            "Delete a task.",
             handler=TasksRemoveHandler,
+            submit="Remove"
         ),
     },
 }
@@ -2554,6 +2596,7 @@ def make_app(picpocket: PicPocket) -> Application:
         template_path=TEMPLATE_DIRECTORY,
         ui_modules={
             "DisplayImage": ImageDisplayHandler,
+            "DisplayTags": TagDisplayHandler,
             "NavBar": NavBarHandler,
         },
     )

@@ -1,0 +1,15 @@
+<ul>
+{% for tag, info in sorted(tags.items()) %}
+{% if parent %}{% set full_name = f"{parent}/{tag}" %}{% else %}{% set full_name = tag %}{% end %}
+<li>
+    {% if info.get("children") %}
+    <details open>
+        <summary><a href="{{reverse_url('tags-get')}}?name={{url_escape(full_name)}}">{{tag}}</a>{% if info.get("description") %}: {{info["description"]}}{% end %}</summary>
+        {% module DisplayTags(info["children"], full_name) %}
+    </details>
+    {% else %}
+    <a href="{{reverse_url('tags-get')}}?name={{url_escape(full_name)}}">{{tag}}</a>{% if info.get("description") %}: {{info["description"]}}{% end %}
+    {% end %}
+</li>
+{% end %}
+</ul>

@@ -1392,7 +1392,7 @@ async def test_tags(run_web, tmp_path, image_files):
         for link in list_tag.find_all("a"):
             tags[link.text] = link["href"]
 
-        assert tags.keys() == {"a", "a/b"}
+        assert tags.keys() == {"a", "b"}
 
         # add and move
         response = requests.get(f"{base}{endpoints['add']}")

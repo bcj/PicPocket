@@ -16,6 +16,25 @@
 
 		<form class="box search-form" method="post">
 			<h4>Filters</h4>
+			<p>Only return images that match certain criteria</p>
+			<details>
+				<summary>More Info</summary>
+				<dl>
+					<dt>Name</dt><dd>The image file name (without extension)</dd>
+					<dt>Extension</dt><dd>The image file suffix</dd>
+					<dt>Creator</dt><dd>Who you listed as the author of the image</dd>
+					<dt>Location</dt><dd>Which device the image is stored on</dd>
+					<dt>Path</dt><dd>The path to the image file (relative to the location root)</dd>
+					<dt>Title</dt><dd>The title you gave the image</dd>
+					<dt>Caption</dt><dd>The caption you gave the image</dd>
+					<dt>Alt</dt><dd>The descriptive text you gave the image</dd>
+					<dt>Rating</dt><dd>What you rated the image</dd>
+					<dt>Creation Date</dt><dd>When the image was made</dd>
+					<dt>Last-Modified Date</dt><dd>When the image file was last modified</dd>
+				</dl>
+			</details>
+			<br>
+
 			<div id=join>
 				<label for="join-strategy">Match:</label>
 				<select id="join-strategy" name="join-strategy" onchange="set_join_visibility()">
@@ -90,7 +109,7 @@
 			<h5>Additional Filters</h5>
 			{% for field in other_parameters %}
             <div class="form-item">
-                <label for="{{field['name']}}">{{field["label"]}}</label>
+                <label for="{{field['name']}}" title="{{field['description']}}">{{field["label"]}}</label>
                 {% if field['input'] == "select" %}
                 <select name="{{field['name']}}" title="{{field['description']}}">
                 {% for option in (field['options']) %}
@@ -108,15 +127,40 @@
 			{% if order %}
 			<div id="order" class="form-group">
 				<h4>Order</h4>
+
+				<p>What order to return images in</p>
+				<details>
+					<summary>More Info</summary>
+					<p>
+						If no order is supplied, images will be returned in an arbitrary order.
+						If multiple properties are supplied, each subsequent property will be used to break ties in the previous property.
+					</p>
+					<dl>
+						<dt>Name</dt><dd>The image file name (without extension)</dd>
+						<dt>Extension</dt><dd>The image file suffix</dd>
+						<dt>Creator</dt><dd>Who you listed as the author of the image</dd>
+						<dt>Location</dt><dd>Which device the image is stored on</dd>
+						<dt>Path</dt><dd>The path to the image file (relative to the location root)</dd>
+						<dt>Title</dt><dd>The title you gave the image</dd>
+						<dt>Caption</dt><dd>The caption you gave the image</dd>
+						<dt>Alt</dt><dd>The descriptive text you gave the image</dd>
+						<dt>Rating</dt><dd>What you rated the image</dd>
+						<dt>Creation Date</dt><dd>When the image was made</dd>
+						<dt>Last-Modified Date</dt><dd>When the image file was last modified</dd>
+						<dt>Random</dt><dd>Randomize the order</dd>
+					</dl>
+				</details>
+				<br>
+
 				<div id="columns">
 				{% for index in range(len(order)) %}
 					<div id="order{{index + 1}}" class="order-group">
 						<select id="order{{index + 1}}-property" name="order{{index + 1}}-property">
 							<option value="" selected></option>
-							{% for option in order %}
-							<option value="{{option}}">{{option}}</option>
+							{% for option_name, option_value in order %}
+							<option value="{{option_value}}">{{option_name}}</option>
 							{% end %}
-							<option value="random">random</option>
+							<option value="random">Random</option>
 						</select>
 						<select id="order{{index + 1}}-direction" name="order{{index + 1}}-direction">
 							<option value="ascending" selected>ascending</option>
@@ -131,12 +175,12 @@
 				</div>
 				<br>
 				<div class="form-item">
-					<label for="limit">Limit:</label>
-					<input type="number" id="limit" name="limit">
+					<label for="limit" title="Only return this many images">Limit:</label>
+					<input type="number" id="limit" name="limit" title="Only return this many images">
 				</div>
 				<div id="offset-group" class="form-item">
-					<label for="offset">Offset:</label>
-					<input type="number" id="offset" name="offset" value="0">
+					<label for="offset" title="Ignored unless limit is supplied. Where in the ordered list of images to start">Offset:</label>
+					<input type="number" id="offset" name="offset" value="0" title="Ignored unless limit is supplied. Where in the ordered list of images to start">
 				</div>
 			</div>
 			{% end %}
@@ -176,12 +220,12 @@
 			),
 			"date": new Map(
 				[
-					["<", {"input": "number"}],
-					["≤", {"input": "number"}],
-					["=", {"input": "number"}],
-					["≥", {"input": "number"}],
-					[">", {"input": "number"}],
-					["≠", {"input": "number"}],
+					["<", {"input": "date"}],
+					["≤", {"input": "date"}],
+					["=", {"input": "date"}],
+					["≥", {"input": "date"}],
+					[">", {"input": "date"}],
+					["≠", {"input": "date"}],
 					["is set", {"value": null}],
 					["isn't set", {"value": null}],
 				]
@@ -373,9 +417,9 @@
 		function set_join_visibility() {
 			if (COUNT > 1) {
 				document.getElementById("join").hidden = false;
-				document.getElementById("join-pattern-div").hidden = (
+				{% if False %}document.getElementById("join-pattern-div").hidden = (
 					document.getElementById("join-strategy").value != "pattern"
-				);
+				);{% end %}
 			} else {
 				document.getElementById("join").hidden = true;
 			}

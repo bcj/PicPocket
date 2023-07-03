@@ -12,13 +12,9 @@
     <main>
         <article>
             <h1>Tags</h1>
-
-            <ul>
-            {% for tag in sorted(tags) %}
-                <li><a href="{{reverse_url('tags-get')}}?name={{url_escape(tag)}}">{{tag}}</a></li>
+            {% if tags %}
+            {% module DisplayTags(tags) %}
             {% end %}
-            </ul>
-
         </article>
     </main>
 </body>

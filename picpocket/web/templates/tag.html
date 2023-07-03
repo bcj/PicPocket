@@ -21,6 +21,11 @@
 
             {% if tag.description %}<p>{{tag.description}}</p>{% end %}
 
+            {% if "/" in tag.name %}
+            <h3>Parent</h3>{% set parent = tag.name.rsplit("/", 1)[0] %}
+            <a href="{{reverse_url('tags-get')}}?name={{url_escape(parent)}}">{{parent}}</a>
+            {% end %}
+
             {% if tag.children %}
             <h3>Children</h3>
             <ul>
