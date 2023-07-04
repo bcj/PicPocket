@@ -154,6 +154,11 @@ img {
     flex-grow: 100;
 }
 
+.image-actions > button {
+    margin-left: 1em;
+    margin-right: 0em;
+}
+
 .image-actions > a {
     margin-left: 1em;
     margin-right: 0em;

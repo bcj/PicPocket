@@ -109,11 +109,11 @@ def test_build_meta(create_parser):
     assert commands == {"web", "import", "export"}
 
     # web
-    args = parser.parse_args(["web"])
-    assert args == Namespace(command="web", port=DEFAULT_PORT)
+    args = parser.parse_args(["web", "--local-actions"])
+    assert args == Namespace(command="web", port=DEFAULT_PORT, local_actions=True)
 
     args = parser.parse_args(["web", "--port", "1234"])
-    assert args == Namespace(command="web", port=1234)
+    assert args == Namespace(command="web", port=1234, local_actions=False)
 
     # import
     args = parser.parse_args(["import", "backup.json"])

@@ -238,6 +238,11 @@ def build_meta(action) -> list[ArgumentParser]:
         default=DEFAULT_PORT,
         help="The port to run the server on",
     )
+    web.add_argument(
+        "--local-actions",
+        action="store_true",
+        help="Provide links that perform local actions (e.g., show in Finder). ",
+    )
 
     importer = action.add_parser("import", description="Import a PicPocket backup")
     importer.add_argument("path", type=full_path, help="The backup to import")
@@ -271,7 +276,7 @@ async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
                 await picpocket.list_locations()
 
                 print("press ^c to stop server")
-                await run_server(picpocket, args.port)
+                await run_server(picpocket, args.port, local_actions=args.local_actions)
             except KeyboardInterrupt:
                 print("shutting down")
         case "import":

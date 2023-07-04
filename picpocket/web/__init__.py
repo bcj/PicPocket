@@ -10,9 +10,11 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from subprocess import check_call
 from tempfile import TemporaryDirectory
 from typing import Any, Optional, cast
 
@@ -277,9 +279,15 @@ class BaseHandler(RequestHandler):
 
 
 class BaseApiHandler(BaseHandler):
-    def initialize(self, endpoint: Endpoint, picpocket: PicPocket):
+    def initialize(
+        self,
+        endpoint: Endpoint,
+        picpocket: PicPocket,
+        local_actions: set[str],
+    ):
         self.endpoint = endpoint
         self.api = picpocket
+        self.local_actions = local_actions
 
     async def display_images(
         self,
@@ -321,6 +329,7 @@ class BaseApiHandler(BaseHandler):
             location_name=location_name,
             query=query,
             forward=forward,
+            local_actions=self.local_actions,
         )
 
 
@@ -592,9 +601,11 @@ class ImagesSearchHandler(BaseApiHandler):
         self,
         endpoint: Endpoint,
         picpocket: PicPocket,
+        local_actions: set[str],
     ):
         self.endpoint = endpoint
         self.api = picpocket
+        self.local_actions = local_actions
         self.parameters: list[dict[str, Any]] = []
         self.properties = None
         self.order: list[str] = []
@@ -982,6 +993,7 @@ class ImagesGetHandler(BaseApiHandler):
             back=back,
             forward=forward,
             query=query,
+            local_actions=self.local_actions,
         )
 
 
@@ -1563,6 +1575,38 @@ class TasksRemoveHandler(BaseApiHandler):
             raise HTTPError(400, "Removing task failed")
 
         self.redirect(self.reverse_url("tasks"))
+
+
+# 'special' handlers
+
+
+class ShowInFinderHandler(RequestHandler):
+    def initialize(self, picpocket: PicPocket):
+        self.api = picpocket
+
+    async def get(self, text_id: str):
+        try:
+            image_id = int(text_id)
+        except Exception:
+            raise HTTPError(400, f"Invalid image id: {text_id}")
+
+        image = await self.api.get_image(image_id)
+
+        if image is None:
+            raise HTTPError(404, f"Unknown image: {image_id}")
+
+        if not image.full_path:
+            raise HTTPError(400, "Image path not known")
+
+        try:
+            check_call(["open", "-R", str(image.full_path)])
+        except Exception:
+            raise HTTPError(500, "opening image failed")
+
+        self.write("done")
+
+
+# UI modules
 
 
 class NavBarHandler(UIModule):
@@ -2511,12 +2555,13 @@ REPLACEMENTS: dict[str, dict[str, str]] = {
 }
 
 
-def make_app(picpocket: PicPocket) -> Application:
+def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
     """Make a tornado Application with all expected routing
 
     Args:
-        exit: An event which can be set to stop the application. If supplied,
-            the server will be stoppable by visiting /exit
+        picpocket: The API
+        local_actions: Include endpoints designed for people only
+            accessing PicPocket from their local machine.
 
     Returns:
         An instantiated tornado Application
@@ -2535,6 +2580,20 @@ def make_app(picpocket: PicPocket) -> Application:
         tornado.web.url(r"/style\.css", StyleHandler),
         tornado.web.url(r"/", RootHandler, name="root"),
     ]
+
+    special_actions = set()
+    if local_actions:
+        match sys.platform:
+            case "darwin":
+                special_actions.add("show-in-finder")
+                routes.append(
+                    tornado.web.url(
+                        rf"{URL_BASE}/show-in-finder/(\d+)",
+                        ShowInFinderHandler,
+                        {"picpocket": picpocket},
+                        name="show-in-finder",
+                    )
+                )
 
     for group, group_endpoint in NAVBAR.items():
         if group_endpoint.handler:
@@ -2559,14 +2618,22 @@ def make_app(picpocket: PicPocket) -> Application:
                         tornado.web.url(
                             f"{endpoint.path}/",
                             endpoint.handler,
-                            {"endpoint": endpoint, "picpocket": picpocket},
+                            {
+                                "endpoint": endpoint,
+                                "picpocket": picpocket,
+                                "local_actions": special_actions,
+                            },
                         )
                     )
                     routes.append(
                         tornado.web.url(
                             endpoint.path,
                             endpoint.handler,
-                            {"endpoint": endpoint, "picpocket": picpocket},
+                            {
+                                "endpoint": endpoint,
+                                "picpocket": picpocket,
+                                "local_actions": special_actions,
+                            },
                             name=f"{group}-{name}",
                         )
                     )
@@ -2578,14 +2645,22 @@ def make_app(picpocket: PicPocket) -> Application:
                         tornado.web.url(
                             f"{endpoint.path.format(**REPLACEMENTS[group])}/",
                             endpoint.handler,
-                            {"endpoint": endpoint, "picpocket": picpocket},
+                            {
+                                "endpoint": endpoint,
+                                "picpocket": picpocket,
+                                "local_actions": special_actions,
+                            },
                         )
                     )
                     routes.append(
                         tornado.web.url(
                             endpoint.path.format(**REPLACEMENTS[group]),
                             endpoint.handler,
-                            {"endpoint": endpoint, "picpocket": picpocket},
+                            {
+                                "endpoint": endpoint,
+                                "picpocket": picpocket,
+                                "local_actions": special_actions,
+                            },
                             name=f"{group}-{name}",
                         )
                     )
@@ -2601,7 +2676,9 @@ def make_app(picpocket: PicPocket) -> Application:
     )
 
 
-async def run_server(picpocket: PicPocket, port: int = DEFAULT_PORT):
+async def run_server(
+    picpocket: PicPocket, port: int = DEFAULT_PORT, local_actions: bool = False
+):
     """Run a PicPocket web server
 
     Run the web interface for PicPocket. Once started, this function
@@ -2610,9 +2687,11 @@ async def run_server(picpocket: PicPocket, port: int = DEFAULT_PORT):
     Args:
         picpocket: The instantiated API
         port: The port to run the server on
+        local_actions: Include endpoints designed for people only
+            accessing PicPocket from their local machine.
     """
 
     shutdown = asyncio.Event()
-    application = make_app(picpocket)
+    application = make_app(picpocket, local_actions=local_actions)
     application.listen(port)
     await shutdown.wait()

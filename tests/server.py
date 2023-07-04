@@ -26,7 +26,7 @@ async def temporary_server(port: int):
             await api.add_tag("another-tag/child")
 
             try:
-                await run_server(api, port)
+                await run_server(api, port, local_actions=True)
             except KeyboardInterrupt:
                 pass
 

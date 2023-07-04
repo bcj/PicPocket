@@ -21,12 +21,13 @@
             {% module DisplayImage(image) %}
 
             <div class="box image-info">
-                <div class="actions image-actions">
+                <div id="image-actions" class="actions image-actions">
                     {% if back %}<a href="{{back}}{{query}}">← Previous</a>{% end %}
                     <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
                     <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
                     <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
-                    {% if forward %}<a href="{{forward}}{{query}}">Next →</a>{% end %}
+                    {% if "show-in-finder" in local_actions %}<button onClick="show_in_finder()">Show in Finder</button>{% end %}
+                    {% if forward %}<a id="forward" href="{{forward}}{{query}}">Next →</a>{% end %}
                 </div>
                 <dl>
                     <dt>Id:</dt>
@@ -91,6 +92,20 @@
             </div>
             {% end %}
         </article>
+        {% if "show-in-finder" in local_actions %}
+        <script type="text/javascript">
+            function show_in_finder() {
+                fetch("{{reverse_url('show-in-finder', image.id)}}").then(
+                    (response) => {
+                        if (response.status != 200) {
+                            console.log("open failed");
+                        }
+                    }
+                );
+            }
+        </script>
+        {% end %}
+
         {% end %}
     </main>
 </body>
