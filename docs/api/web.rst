@@ -1,7 +1,11 @@
-WEB Interface
+Web Interface
 =============
 
-.. todo::
-    Write these docs!
+The web interface needs to be started from the command line:
 
-PicPocket's main interface is its Web interface. It is not currently recommended that you make the interface accessible anywhere but on the host machine.
+.. code-block:: bash
+
+    picpocket web --port 8080
+
+While the web interface is under active development, it is considered experimental.
+The interface is separately versioned, so it *should* be safe to write a scraper against a specific (non-dev) version, but it is not recommended.

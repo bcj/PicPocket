@@ -6,7 +6,7 @@ Installing PicPocket
     If you are using another OS, you may want to hold off on installing it.
 
 PicPocket requires Python 3.11 or above.
-You will need a copy installed in order to use PicPocket
+You will need a copy installed in order to use PicPocket.
 
 PicPocket is not yet on PyPI.
 You will need to clone or download a copy of this repository in order to install it.

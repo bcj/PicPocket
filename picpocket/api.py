@@ -396,7 +396,7 @@ class PicPocket(Protocol):
                 images should be copied to. This is supplied as a format
                 string with the following allowed formatters:
 
-                * path: The source filepath (relative to the source) root.
+                * directory: The source filepath (relative to the source) root.
                 * file: The file's name
                 * name: The file's name (without extension)
                 * extension: The file's extension (without the leading
@@ -409,7 +409,7 @@ class PicPocket(Protocol):
                 * hash: A hash of the image contents
                 * index: A 1-indexed number representing the order
                   images are encountered by the running task. PicPocket
-                  makes no promised about the order images are added
+                  makes no promises about the order images are added
             file_formats: Only import images that have these suffixes.
                 Suffixes can be supplied with or without leading dot.
                 If not supplied, the PicPocket default file formats
