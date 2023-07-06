@@ -1976,6 +1976,7 @@ async def test_search_images(load_api, tmp_path, image_files):
         [ajpg, bjpg, apng] = await api.get_image_ids(order=("extension", "name"))
 
         await api.tag_image(ajpg, "aaa")
+        await api.tag_image(ajpg, "aaa/xxx")
         await api.tag_image(ajpg, "abc")
         await api.tag_image(apng, "aaa")
 

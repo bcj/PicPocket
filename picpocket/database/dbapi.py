@@ -2255,25 +2255,21 @@ class DbApi(PicPocket, ABC):
             )
 
         if all_tags:
-            tag_ids = set()
+            # rip to a real one. we were previously doing a single select
+            # and counting the matching tags but that returns false
+            # positives if you have multiple tags on an image that match
+            # one of the requested tags
             for tag in all_tags:
+                tag_ids = set()
                 tag_ids.update(await self._related_tags(cursor, tag))
-            parts.append(
-                self.sql.format(
-                    (
-                        "id IN ("
-                        "SELECT image FROM image_tags "
-                        "WHERE {} "
-                        "GROUP BY image "
-                        "HAVING COUNT(tag) = {}"
-                        ")"
-                    ),
-                    Number("tag", Comparator.EQUALS, list(tag_ids)).prepare(
-                        self.sql, values
-                    ),
-                    self.sql.literal(len(all_tags)),
+                parts.append(
+                    self.sql.format(
+                        "id IN (SELECT image FROM image_tags WHERE {})",
+                        Number("tag", Comparator.EQUALS, list(tag_ids)).prepare(
+                            self.sql, values
+                        ),
+                    )
                 )
-            )
 
         if parts:
             return self.sql.join(" AND ", parts)
