@@ -45,117 +45,19 @@
         </div>
     </main>
     {% if known_tags is not None %}
+    <script type="text/javascript" src="/scripts.js"></script>
     <script type="text/javascript">
         const KNOWN_TAGS = {% raw json_encode(known_tags) %};
         const CURRENT_TAGS = {% raw json_encode(existing_tags) %};
 
         function setup_js() {
-            form = document.getElementById("form");
-            datalist = document.createElement("datalist");
-            datalist.id = "known-tags";
-            for (tag of KNOWN_TAGS) {
-                option = document.createElement("option");
-                option.setAttribute("value", tag);
-                datalist.appendChild(option);
-            }
-            form.appendChild(datalist);
+            known_id = create_tag_list("form", KNOWN_TAGS);
 
             for ([name, tags] of Object.entries(CURRENT_TAGS)) {
-                div = document.getElementById("item-" + name);
-
-                add_form = document.createElement("form");
-                add_form.id = "add-tag-form-" + name;
-                add_form.setAttribute("class", "tag-form")
-
-                input = document.createElement("input");
-                input.id = "add-tag-" + name;
-                input.setAttribute("class", "add-text");
-                input.setAttribute("form", add_form.id);
-                input.setAttribute("type", "text");
-                input.setAttribute("list", "known-tags");
-                add_form.appendChild(input);
-
-                button = document.createElement("input");
-                button.setAttribute("class", "add-button")
-                button.setAttribute("type", "submit");
-                button.setAttribute("form", add_form.id);
-                button.setAttribute("value", "add");
-                add_form.appendChild(button);
-
-                add_form.setAttribute("onsubmit", "return add_tag('" + name + "')");
-                div.appendChild(add_form);
-
-                select = document.createElement("select");
-                select.id = name;
-                select.setAttribute("name", name);
-                select.setAttribute("multiple", true);
-
-                for (tag of tags) {
-                    option = document.createElement("option");
-                    option.setAttribute("value", tag);
-                    option.appendChild(document.createTextNode(tag));
-                    select.appendChild(option);
-                }
-
-                div.appendChild(select);
-
-                button = document.createElement("button");
-                button.appendChild(document.createTextNode("remove"));
-                button.setAttribute("type", "button");
-                button.setAttribute("onclick", "remove_tag('" + name + "')");
-                div.appendChild(button);
+                create_tag_form("item-" + name, name, known_id, tags);
             }
 
-            form.setAttribute("onsubmit", "return select_all()");
-        }
-
-        function add_tag(name) {
-            input = document.getElementById("add-tag-" + name);
-            select = document.getElementById(name);
-
-            options = select.children;
-            matching = false;
-            for (i = 0; i < options.length; i++) {
-                if (options[i].value == input.value) {
-                    matching = true;
-                    break;
-                }
-            }
-
-            if (!matching) {
-                option = document.createElement("option");
-                option.setAttribute("value", input.value);
-                option.appendChild(document.createTextNode(input.value));
-                select.appendChild(option);
-            }
-
-            input.value = "";
-
-            return false;
-        }
-
-        function remove_tag(name) {
-
-            select = document.getElementById(name);
-
-            options = select.children;
-            for (i = 0; i < options.length; i++) {
-                if (options[i].selected) {
-                    options[i].remove();
-                }
-            }
-        }
-
-        function select_all() {
-            for ([name, tags] of Object.entries(CURRENT_TAGS)) {
-                select = document.getElementById(name);
-                options = select.children;
-                for (i = 0; i < options.length; i++) {
-                    options[i].selected = true;
-                }
-
-                return true;
-            }
+            document.getElementById("form").setAttribute("onsubmit", "return select_all()");
         }
 
         window.addEventListener("DOMContentLoaded", setup_js);

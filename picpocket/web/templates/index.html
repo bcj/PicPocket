@@ -34,7 +34,7 @@
                     <option value="{{info.path}}">{{name}}</option>
                 {% end %}
                 </select>
-                <button type="button" onclick="go_to_action()" class="go-action">Go</button>
+                <button type="button" onclick="go_to_action('{{id_name}}')" class="go-action">Go</button>
             </form>
             <dl id=actions>
             {% for name, info in actions.items() %}
@@ -46,16 +46,8 @@
         {% end %}
     </main>
     {% if actions %}
+    <script type="text/javascript" src="/scripts.js"></script>
     <script type="text/javascript">
-        const placeholder = "{{id_name}}";
-
-        function go_to_action() {
-            let id = document.getElementById("id").value;
-            let format_string = document.getElementById("action").value;
-            let url = format_string.replaceAll(placeholder, id);
-            window.location.href = url;
-        }
-
         function setup_js() {
             element = document.getElementById("go-to-action");
             if (element) {

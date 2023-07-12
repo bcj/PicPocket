@@ -26,7 +26,7 @@
                     <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
                     <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
                     <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
-                    {% if "show-in-finder" in local_actions %}<button onClick="show_in_finder()">Show in Finder</button>{% end %}
+                    {% if "show-in-finder" in local_actions %}<button onClick="call_special_action('{{reverse_url("show-in-finder", image.id)}}', 'Show in finder')">Show in Finder</button>{% end %}
                     {% if forward %}<a id="forward" href="{{forward}}{{query}}">Next →</a>{% end %}
                 </div>
                 <dl>
@@ -93,19 +93,8 @@
             {% end %}
         </article>
         {% if "show-in-finder" in local_actions %}
-        <script type="text/javascript">
-            function show_in_finder() {
-                fetch("{{reverse_url('show-in-finder', image.id)}}").then(
-                    (response) => {
-                        if (response.status != 200) {
-                            console.log("open failed");
-                        }
-                    }
-                );
-            }
-        </script>
+        <script type="text/javascript" src="/scripts.js"></script>
         {% end %}
-
         {% end %}
     </main>
 </body>

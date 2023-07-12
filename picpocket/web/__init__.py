@@ -339,6 +339,12 @@ class StyleHandler(BaseHandler):
         self.render("style.css", light=LIGHT, dark=DARK)
 
 
+class ScriptHandler(BaseHandler):
+    def get(self):
+        self.set_header("Content-Type", "application/javascript")
+        self.render("scripts.js")
+
+
 class RootHandler(BaseHandler):
     def get(self):
         self.redirect(self.reverse_url("home"))
@@ -2578,6 +2584,7 @@ def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
         | tuple[str | tornado.routing.Matcher, Any, dict[str, Any], str]
     ] = [
         tornado.web.url(r"/style\.css", StyleHandler),
+        tornado.web.url(r"/scripts\.js", ScriptHandler),
         tornado.web.url(r"/", RootHandler, name="root"),
     ]
 
