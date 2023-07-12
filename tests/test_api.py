@@ -630,7 +630,11 @@ async def test_tasks(load_api, tmp_path, image_files):
         definitely_before = before - timedelta(seconds=1)  # only second precision
         timestamp = definitely_before.timestamp()
         os.utime((source / "d.jpg"), (timestamp, timestamp))
-        assert len(await api.run_task("basic")) == 1
+        image_ids = await api.run_task("basic", tags=["dogs", "cats"])
+        assert len(image_ids) == 1
+
+        for id in image_ids:
+            assert sorted((await api.get_image(id, tags=True)).tags) == ["cats", "dogs"]
 
         # rerun with since should find earlier image
         assert len(await api.run_task("basic")) == 0
@@ -721,7 +725,7 @@ async def test_tasks(load_api, tmp_path, image_files):
             )
 
         # no previous run so we expect it to look at old directories
-        ids = await api.run_task("complicated")
+        ids = await api.run_task("complicated", tags=["d/e/f", "gee"])
         assert len(ids) == 14
 
         for path in ignored:
@@ -732,7 +736,7 @@ async def test_tasks(load_api, tmp_path, image_files):
 
             assert image.hash == image.path.stem.rsplit("-", 1)[-1]
             assert image.creator == "bcj"
-            assert sorted(image.tags) == ["a", "a/b/c"]
+            assert sorted(image.tags) == ["a", "a/b/c", "d/e/f", "gee"]
 
         # we're not freezing dates so we should update now in case it
         # is a new day now

@@ -14,7 +14,7 @@
 		<h1>{{title}}</h1>
 		<p>{{description}}</p>
 
-		<form class="box search-form" method="post">
+		<form id="form" class="box search-form" method="post">
 			<h4>Filters</h4>
 			<p>Only return images that match certain criteria</p>
 			<details>
@@ -105,10 +105,10 @@
 				</noscript>
 			</div>
 			<button id="add-filter" type="button" onclick="add_filter()" hidden>Add Filter</button>
-			{% if other_parameters %}
+			{% if other_parameters %}{% set existing_tags = {} %}
 			<h5>Additional Filters</h5>
 			{% for field in other_parameters %}
-            <div class="form-item">
+            <div id="item-{{field['name']}}" class="form-item">
                 <label for="{{field['name']}}" title="{{field['description']}}">{{field["label"]}}</label>
                 {% if field['input'] == "select" %}
                 <select name="{{field['name']}}" title="{{field['description']}}">
@@ -118,6 +118,8 @@
                 </select>
                 {% elif field['input'] == "textarea" %}
                 <br><textarea class="text" name={{field['name']}} title="{{field['description']}}" rows=3></textarea>
+                {% elif field['input'] == "tags" %}{% set existing_tags[field["name"]] = existing.get(field["name"], []) %}
+                    <noscript><textarea name="{{field['name']}}-list">{{"\n".join((existing.get(field['name'])) or "")}}</textarea></noscript>
                 {% else %}
                 <input type="{{field['input']}}" name="{{field['name']}}" title="{{field['description']}}" {% if field["required"] %} required{% end %}{% if field["input"] == "checkbox"and field.get("default") %} checked{% end %}>
                 {% end %}
@@ -189,7 +191,11 @@
 		</form>
 	</main>
 
+	<script type="text/javascript" src="/scripts.js"></script>
 	<script type="text/javascript">
+		const KNOWN_TAGS = {% raw json_encode(known_tags) %};
+        const CURRENT_TAGS = {% raw json_encode(existing_tags) %};
+
 		const PARAMETERS = new Map({% raw json_encode(parameters) %});
 		const TYPES = {
 			"number": new Map(
@@ -452,6 +458,16 @@
 			document.getElementById("add-filter").hidden = false;
 			set_join_visibility();
 			set_ordering();
+
+			{% if existing_tags is not None %}
+			known_id = create_tag_list("form", KNOWN_TAGS);
+
+			for ([name, tags] of Object.entries(CURRENT_TAGS)) {
+                create_tag_form("item-" + name, name, known_id, tags);
+            }
+
+			document.getElementById("form").setAttribute("onsubmit", "return select_all()");
+			{% end %}
 		}
 
 		window.addEventListener("DOMContentLoaded", setup_js);

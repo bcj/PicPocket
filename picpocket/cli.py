@@ -729,6 +729,12 @@ def build_tasks(action) -> list[ArgumentParser]:
         metavar=("NAME_OR_ID", "PATH"),
         help="Provide the path to the mount point of a location",
     )
+    run.add_argument(
+        "--tag",
+        dest="tags",
+        action="append",
+        help="A tag to apply when importing",
+    )
     run_output_group = run.add_mutually_exclusive_group()
     run_output_group.add_argument(
         "--count",
@@ -834,7 +840,10 @@ async def run_task(picpocket: PicPocket, args: Namespace, print=print):
             mounted = await mount_requested(picpocket, args.mounts)
             try:
                 ids = await picpocket.run_task(
-                    args.name, since=args.since, full=args.full
+                    args.name,
+                    since=args.since,
+                    full=args.full,
+                    tags=args.tags,
                 )
             finally:
                 for id in mounted:

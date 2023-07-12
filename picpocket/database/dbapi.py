@@ -961,8 +961,12 @@ class DbApi(PicPocket, ABC):
         *,
         since: Optional[datetime] = None,
         full: bool = False,
+        tags: Optional[list[str]] = None,
     ) -> list[int]:
         now = datetime.now().astimezone()
+
+        if tags is None:
+            tags = []
 
         async with (
             await self.connect() as connection,
@@ -1029,7 +1033,8 @@ class DbApi(PicPocket, ABC):
                     raise ValueError("Destination not mounted")
 
             creator = configuration.get("creator")
-            tags = configuration.get("tags")
+            tags.extend(configuration.get("tags", []))
+
             if tags:
                 tag_ids = []
                 for tag in tags:

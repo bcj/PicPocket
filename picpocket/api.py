@@ -423,6 +423,7 @@ class PicPocket(Protocol):
         *,
         since: Optional[datetime] = None,
         full: bool = False,
+        tags: Optional[list[str]] = None,
     ) -> list[int]:
         """Run a task
 
@@ -443,6 +444,7 @@ class PicPocket(Protocol):
                 if full is supplied.
             full: Don't filter directories based on the last-run date
                 of the task.
+            tags: Any tags to include to this specific run
 
         Returns:
             The ids of all imported images.

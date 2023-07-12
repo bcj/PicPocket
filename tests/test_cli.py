@@ -589,9 +589,12 @@ def test_build_tasks(create_parser):
         since=None,
         full=False,
         mounts=None,
+        tags=None,
         output=Output.FULL,
     )
-    args = parser.parse_args(["task", "run", "import", "--full", "--json"])
+    args = parser.parse_args(
+        ["task", "run", "import", "--tag", "dogs", "--tag", "cats", "--full", "--json"]
+    )
     assert args == Namespace(
         command="task",
         subcommand="run",
@@ -599,6 +602,7 @@ def test_build_tasks(create_parser):
         since=None,
         full=True,
         mounts=None,
+        tags=["dogs", "cats"],
         output=Output.JSON,
     )
     args = parser.parse_args(
@@ -624,6 +628,7 @@ def test_build_tasks(create_parser):
         since=datetime(2020, 1, 2, 3, 4).astimezone(),
         full=False,
         mounts=[["source", "/path/to/source"], ["2", "~/destination"]],
+        tags=None,
         output=Output.COUNT,
     )
 
@@ -1994,6 +1999,7 @@ async def test_run_task(load_api, tmp_path, image_files):
                 since=None,
                 full=False,
                 mounts=None,
+                tags=None,
                 output=Output.JSON,
             ),
             print=printer.print,
@@ -2013,6 +2019,7 @@ async def test_run_task(load_api, tmp_path, image_files):
                 since=None,
                 full=False,
                 mounts=None,
+                tags=None,
                 output=Output.FULL,
             ),
             print=printer.print,
@@ -2028,6 +2035,7 @@ async def test_run_task(load_api, tmp_path, image_files):
                 since=None,
                 full=False,
                 mounts=None,
+                tags=None,
                 output=Output.COUNT,
             ),
             print=printer.print,
@@ -2061,6 +2069,7 @@ async def test_run_task(load_api, tmp_path, image_files):
                     since=None,
                     full=False,
                     mounts=None,
+                    tags=None,
                     output=Output.COUNT,
                 ),
             )
@@ -2074,6 +2083,7 @@ async def test_run_task(load_api, tmp_path, image_files):
                 since=None,
                 full=False,
                 mounts=[["source", source]],
+                tags=["dogs", "cats"],
                 output=Output.COUNT,
             ),
             print=printer.print,
@@ -2107,6 +2117,7 @@ async def test_run_task(load_api, tmp_path, image_files):
                 since=None,
                 full=False,
                 mounts=[["source", source]],
+                tags=None,
                 output=Output.COUNT,
             ),
             print=printer.print,

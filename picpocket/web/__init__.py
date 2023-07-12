@@ -634,6 +634,8 @@ class ImagesSearchHandler(BaseApiHandler):
             if filter_property[0] == "location":
                 filter_property[1]["options"] = locations
 
+        known_tags = sorted(await self.api.all_tag_names())
+
         self.render_web(
             "search.html",
             title=self.endpoint.title,
@@ -643,6 +645,8 @@ class ImagesSearchHandler(BaseApiHandler):
             other_parameters=self.parameters,
             order=self.order,
             properties=self.properties,
+            known_tags=known_tags,
+            existing={},
         )
 
     async def post(self):
@@ -810,9 +814,14 @@ class ImagesSearchHandler(BaseApiHandler):
 
         tag_kwargs = {}
         for option in ("any_tags", "all_tags", "no_tags"):
-            text = self.get_body_argument(option, None)
-            if text:
-                tag_kwargs[option] = list(text.splitlines())
+            tags = self.get_body_arguments(option, None)
+            if not tags:
+                text = self.get_body_argument(f"{option}-list", None)
+                if text:
+                    tags = list(text.splitlines())
+
+            if tags:
+                tag_kwargs[option] = tags
 
         ids = await self.api.get_image_ids(
             filter,
@@ -1446,7 +1455,14 @@ class TasksRunHandler(BaseApiHandler):
         if task.last_ran:
             existing["since"] = task.last_ran.strftime("%Y-%m-%dT%H:%M")
 
-        self.write_form("form.html", self.endpoint, existing=existing)
+        known_tags = sorted(await self.api.all_tag_names())
+
+        self.write_form(
+            "form.html",
+            self.endpoint,
+            existing=existing,
+            known_tags=known_tags,
+        )
 
     async def post(self, name):
         since = None
@@ -1456,8 +1472,14 @@ class TasksRunHandler(BaseApiHandler):
 
         full = self.get_body_argument("full", "off") == "on"
 
+        tags = self.get_body_arguments("tags", None)
+        if not tags:
+            tagsstr = self.get_body_argument("tags-list", None)
+            if tagsstr:
+                tags = tagsstr.splitlines()
+
         try:
-            ids = await self.api.run_task(name, since=since, full=full)
+            ids = await self.api.run_task(name, since=since, full=full, tags=tags)
         except Exception as exception:
             raise HTTPError(400, repr(exception))
             raise HTTPError(400, "Running task failed")
@@ -1843,24 +1865,24 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                     "description": "Only return images with at least one matching tag.",
                     "required": False,
                     "type": "text",
-                    "input": "textarea",
-                    "label": "Any Tags (one per line):",
+                    "input": "tags",
+                    "label": "Any Tags:",
                 },
                 {
                     "name": "all_tags",
                     "description": "Only return images with all supplied tags",
                     "required": False,
                     "type": "text",
-                    "input": "textarea",
-                    "label": "All Tags (one per line):",
+                    "input": "tags",
+                    "label": "All Tags:",
                 },
                 {
                     "name": "no_tags",
                     "description": "Only return images without any supplied tags",
                     "required": False,
                     "type": "text",
-                    "input": "textarea",
-                    "label": "No Tags (one per line):",
+                    "input": "tags",
+                    "label": "No Tags:",
                 },
             ],
         ),
@@ -2475,6 +2497,13 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                     "required": False,
                     "input": "checkbox",
                     "label": "Full:",
+                },
+                {
+                    "name": "tags",
+                    "description": "Tags to apply to all imported images",
+                    "required": False,
+                    "input": "tags",
+                    "label": "Tags:",
                 },
             ],
         ),

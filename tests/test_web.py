@@ -1042,9 +1042,9 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         expected_keys = {
             "join-strategy",
             "tagged",
-            "any_tags",
-            "all_tags",
-            "no_tags",
+            "any_tags-list",
+            "all_tags-list",
+            "no_tags-list",
             "reachable",
             "limit",
             "offset",
@@ -1081,9 +1081,9 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             "value": None,
             "options": ["", "No", "Yes"],
         }
-        assert inputs["any_tags"] == {"type": "textarea", "value": None}
-        assert inputs["all_tags"] == {"type": "textarea", "value": None}
-        assert inputs["no_tags"] == {"type": "textarea", "value": None}
+        assert inputs["any_tags-list"] == {"type": "textarea", "value": None}
+        assert inputs["all_tags-list"] == {"type": "textarea", "value": None}
+        assert inputs["no_tags-list"] == {"type": "textarea", "value": None}
         assert inputs["reachable"] == {
             "type": "select",
             "value": None,
@@ -1820,6 +1820,7 @@ async def test_tasks(run_web, tmp_path, image_files):
         assert inputs == {
             "since": {"type": "datetime-local", "value": None},
             "full": {"type": "checkbox", "value": False},
+            "tags-list": {"type": "textarea", "value": None},
         }
 
         a = camera / "2020" / "1" / "2" / "2020-01" / "aab" / "{hi}"
