@@ -901,6 +901,18 @@ class PicPocket(Protocol):
             their description and the dict of their child tags.
         """
 
+    async def get_tag_set(self, *image_ids: int, minimum: int = 1) -> dict[str, int]:
+        """Get the set of tags applied to any of a set of images
+
+        Args:
+            image_ids: The images to find tags for
+            minimum: Only return tags that have been applied to this
+                many images.
+
+        Returns:
+            A dict with the tags as keys and their counts
+        """
+
     async def create_session(
         self,
         data: dict[str, Any],

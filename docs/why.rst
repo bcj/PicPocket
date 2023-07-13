@@ -26,8 +26,8 @@ PicPocket's features and functionality are limited by both what I have the time 
 This is software that I am entrusting with my own photos, so you can rest assured that all code will be thoroughly tested prior to release, and that any potentially-destructive action will err on the safest default (e.g., PicPocket will refuse to overwrite a photo on import, and defaults to leaving the file when an image is removed from the database).
 But this means that the UI will be clunkier than commercial software, updates will be smaller and less frequent, and that good feature requests may be rejected.
 
-PicPocket does not offer suggested tags for photos.
-Any such functionality will be minimal (e.g., suggesting tags applied to other photos in a batch) and opt-in.
+PicPocket does not offer machine-learning-based suggested tags for photos.
+The only suggestions that PicPocket offers are opt-in, and solely based on your own tagging (optionally, PicPocket will suggest tags that you've applied to images in that batch).
 PicPocket does not collect or share information about what photos you store in it, metadata you create for photos (such as tags or descriptions), or how you use PicPocket.
 Anything you do with PicPocket will stay within your local setup.
 

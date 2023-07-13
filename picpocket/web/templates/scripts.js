@@ -1,4 +1,4 @@
-function go_to_action(placeholder) {
+{% whitespace all %}function go_to_action(placeholder) {
     // go to a link that requires filling in a placeholder value
     let id = document.getElementById("id").value;
     let format_string = document.getElementById("action").value;
@@ -32,7 +32,7 @@ function create_tag_list(id, tag_list) {
     return datalist.id;
 }
 
-function create_tag_form(parent_id, name, known_id, tags) {
+function create_tag_form(parent_id, name, known_id, tags, suggestions = undefined) {
     parent = document.getElementById(parent_id);
 
     add_form = document.createElement("form");
@@ -77,6 +77,44 @@ function create_tag_form(parent_id, name, known_id, tags) {
     button.setAttribute("type", "button");
     button.setAttribute("onclick", "remove_tag('" + name + "')");
     parent.appendChild(button);
+
+    if (suggestions != undefined && suggestions.length > 0) {
+        suggestion_form = document.createElement("form")
+        suggestion_form.id = "suggest-tag-form-" + name;
+        suggestion_form.setAttribute("class", "suggestion");
+        suggestion_form.setAttribute("onsubmit", "return add_suggested_tag('" + name + "')");
+
+        label = document.createElement("label")
+        label.setAttribute("for", "suggest-" + name)
+        label.setAttribute("class", "suggestion");
+        label.appendChild(document.createTextNode("Suggestions:"));
+        suggestion_form.appendChild(label)
+
+        select = document.createElement("select");
+        select.id = "suggest-" + name;
+        select.setAttribute("name", select.id);
+        select.setAttribute("class", "tag-list suggestion");
+        select.setAttribute("multiple", true);
+        select.setAttribute("height", Math.min(suggestions.length, 10))
+
+        for (tag of suggestions) {
+            option = document.createElement("option");
+            option.setAttribute("value", tag);
+            option.appendChild(document.createTextNode(tag));
+            select.appendChild(option);
+        }
+
+        suggestion_form.appendChild(select);
+
+        button = document.createElement("button");
+        button.setAttribute("class", "suggestion");
+        button.appendChild(document.createTextNode("add"));
+        button.setAttribute("type", "button");
+        button.setAttribute("onclick", "add_suggested_tag('" + name + "')");
+        suggestion_form.appendChild(button);
+
+        parent.appendChild(suggestion_form);
+    }
 }
 
 function add_tag(name) {
@@ -111,14 +149,50 @@ function add_tag(name) {
     return false;
 }
 
+function add_suggested_tag(name) {
+    input = document.getElementById("suggest-" + name);
+    select = document.getElementById(name);
+
+    to_move = [];
+    count = 0;
+    for (option of input.children) {
+        if (option.selected) {
+            option.selected = false;
+
+            matching = false;
+            for (existing of select.children) {
+                if (existing.value == option.value) {
+                    matching = true;
+                    break;
+                }
+            }
+
+            if (!matching) {
+                to_move.push(option);
+            }
+        } else {
+            count += 1;
+        }
+    }
+
+    for (option of to_move) {
+        select.appendChild(option)
+    }
+
+    if (count == 0) {
+        document.getElementById("suggest-tag-form-" + name).remove();
+    }
+
+    return false;
+}
+
 function remove_tag(name) {
 
     select = document.getElementById(name);
 
-    options = select.children;
-    for (i = 0; i < options.length; i++) {
-        if (options[i].selected) {
-            options[i].remove();
+    for (option of select.children) {
+        if (option.selected) {
+            option.remove();
         }
     }
 }

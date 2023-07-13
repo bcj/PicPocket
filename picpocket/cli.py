@@ -243,6 +243,17 @@ def build_meta(action) -> list[ArgumentParser]:
         action="store_true",
         help="Provide links that perform local actions (e.g., show in Finder). ",
     )
+    web.add_argument(
+        "--suggestions",
+        default=0,
+        type=int,
+        help=(
+            "How many tags to suggest when editing images. "
+            "Suggestions will only be given for task imports. "
+            "The suggested tags are the most common tags that have been "
+            "applied to that import set."
+        ),
+    )
 
     importer = action.add_parser("import", description="Import a PicPocket backup")
     importer.add_argument("path", type=full_path, help="The backup to import")
@@ -276,7 +287,12 @@ async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
                 await picpocket.list_locations()
 
                 print("press ^c to stop server")
-                await run_server(picpocket, args.port, local_actions=args.local_actions)
+                await run_server(
+                    picpocket,
+                    args.port,
+                    local_actions=args.local_actions,
+                    suggestions=args.suggestions,
+                )
             except KeyboardInterrupt:
                 print("shutting down")
         case "import":

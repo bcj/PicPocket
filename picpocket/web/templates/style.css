@@ -1,4 +1,4 @@
-:root {
+{% whitespace all %}:root {
     --background-color: {{light.background}};
     --secondary-color: {{light.secondary}};
     --text-color: {{light.text}};
@@ -166,6 +166,10 @@ img {
 
 .image-actions > a:first-of-type {
     margin-left: 0em;
+}
+
+.suggestion {
+    width: 100%;
 }
 
 input:invalid:required ~ .go-action {

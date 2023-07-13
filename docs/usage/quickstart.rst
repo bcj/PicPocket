@@ -40,6 +40,14 @@ If you are only using PicPocket on the same machine, you can pass the `--local-a
 
 At present, all this adds is the ability to show an image file in Finder on macOS, but other functionality (e.g., open in Image Editor) may eventually be added.
 
+If you would like PicPocket to suggest tags based on other image in a set when importing images, pass the `--suggestions` flag as well as a number representing the maximum number of suggestions you want:
+
+.. code-block:: bash
+
+    picpocket web --port 8080 --suggestions 5
+
+These suggestions are local to your instance and are based solely on what tags you've applied to that same imported set of images (it is the *N* most common tags that have been used in that set that have not been applied to the image you're looking at).
+
 Setting up Locations
 --------------------
 

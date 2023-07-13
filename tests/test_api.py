@@ -2609,6 +2609,66 @@ async def test_move_tag(load_api, tmp_path, image_files):
 
 
 @pytest.mark.asyncio
+async def test_tag_sets(load_api, tmp_path, image_files):
+    async with load_api() as api:
+        location_id = await api.add_location("main", tmp_path, destination=True)
+        images = []
+        images.append(
+            await api.add_image_copy(
+                image_files[0],
+                location_id,
+                "a.jpg",
+                tags=["a", "a/b", "a/c"],
+            )
+        )
+        images.append(
+            await api.add_image_copy(
+                image_files[0],
+                location_id,
+                "b.jpg",
+                tags=["a/b", "a/c"],
+            )
+        )
+        images.append(
+            await api.add_image_copy(
+                image_files[0],
+                location_id,
+                "c.jpg",
+                tags=["a/c", "a/b/c"],
+            )
+        )
+        await api.add_image_copy(
+            image_files[0],
+            location_id,
+            "d.jpg",
+            tags=["a/c", "a/b/c"],
+        )
+
+        assert await api.get_tag_set(*images) == {
+            "a": 1,
+            "a/b": 2,
+            "a/c": 3,
+            "a/b/c": 1,
+        }
+
+        assert await api.get_tag_set(*images, minimum=None) == {
+            "a": 1,
+            "a/b": 2,
+            "a/c": 3,
+            "a/b/c": 1,
+        }
+
+        assert await api.get_tag_set(*images, minimum=1) == {
+            "a": 1,
+            "a/b": 2,
+            "a/c": 3,
+            "a/b/c": 1,
+        }
+
+        assert await api.get_tag_set(*images, minimum=2) == {"a/b": 2, "a/c": 3}
+
+
+@pytest.mark.asyncio
 async def test_import_export(load_api, tmp_path, image_files):
     from picpocket import VERSION
     from picpocket.database import logic

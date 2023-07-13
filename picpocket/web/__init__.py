@@ -83,6 +83,7 @@ class BaseHandler(RequestHandler):
         options: Optional[dict[str, list[str]]] = None,
         existing: Optional[dict[str, Any]] = None,
         known_tags: Optional[list[str]] = None,
+        suggestions: Optional[list[str]] = None,
         **kwargs,
     ):
         if options is None:
@@ -100,6 +101,7 @@ class BaseHandler(RequestHandler):
             options=options,
             existing=existing,
             known_tags=known_tags,
+            suggestions=suggestions,
             **kwargs,
         )
 
@@ -284,15 +286,18 @@ class BaseApiHandler(BaseHandler):
         endpoint: Endpoint,
         picpocket: PicPocket,
         local_actions: set[str],
+        suggestions: int,
     ):
         self.endpoint = endpoint
         self.api = picpocket
         self.local_actions = local_actions
+        self.suggestions = suggestions
 
     async def display_images(
         self,
         images: list[int] | list[Image],
         action: str = "Found",
+        suggestions: bool = False,
     ):
         query = ""
         forward = ""
@@ -315,7 +320,9 @@ class BaseApiHandler(BaseHandler):
                     location_name = location.name
 
             if len(ids) > 1:
-                session_id = await self.api.create_session({"ids": ids})
+                session_id = await self.api.create_session(
+                    {"ids": ids, "suggestions": suggestions}
+                )
                 query = f"?set={session_id}"
                 forward = self.reverse_url("images-get", ids[1])
         else:
@@ -608,10 +615,12 @@ class ImagesSearchHandler(BaseApiHandler):
         endpoint: Endpoint,
         picpocket: PicPocket,
         local_actions: set[str],
+        suggestions: int,
     ):
         self.endpoint = endpoint
         self.api = picpocket
         self.local_actions = local_actions
+        self.suggestions = suggestions
         self.parameters: list[dict[str, Any]] = []
         self.properties = None
         self.order: list[str] = []
@@ -1037,6 +1046,24 @@ class ImagesEditHandler(BaseApiHandler):
 
         known_tags = sorted(await self.api.all_tag_names())
 
+        suggestions = []
+        session_id = self.get_query_argument("set", None)
+        if self.suggestions and session_id:
+            try:
+                session = await self.api.get_session(int(session_id))
+
+                if session.get("suggestions"):
+                    count = 0
+                    for tag in await self.api.get_tag_set(*session["ids"]):
+                        if tag not in image.tags:
+                            suggestions.append(tag)
+                            count += 1
+
+                            if count == self.suggestions:
+                                break
+            except Exception:
+                pass
+
         existing = image.serialize()
         if "tags" in existing:
             existing["tags"] = image.tags
@@ -1047,6 +1074,7 @@ class ImagesEditHandler(BaseApiHandler):
             existing=existing,
             image=image,
             known_tags=known_tags,
+            suggestions=suggestions,
         )
 
     async def post(self, image_id):
@@ -1484,7 +1512,7 @@ class TasksRunHandler(BaseApiHandler):
             raise HTTPError(400, repr(exception))
             raise HTTPError(400, "Running task failed")
 
-        await self.display_images(ids, "Copied")
+        await self.display_images(ids, "Copied", suggestions=self.suggestions > 0)
 
 
 class TasksGetHandler(BaseApiHandler):
@@ -2590,13 +2618,19 @@ REPLACEMENTS: dict[str, dict[str, str]] = {
 }
 
 
-def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
+def make_app(
+    picpocket: PicPocket,
+    *,
+    local_actions: bool = False,
+    suggestions: int = 0,
+) -> Application:
     """Make a tornado Application with all expected routing
 
     Args:
         picpocket: The API
         local_actions: Include endpoints designed for people only
             accessing PicPocket from their local machine.
+        suggestions: How many tags to suggest when editing images
 
     Returns:
         An instantiated tornado Application
@@ -2658,6 +2692,7 @@ def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
                                 "endpoint": endpoint,
                                 "picpocket": picpocket,
                                 "local_actions": special_actions,
+                                "suggestions": suggestions,
                             },
                         )
                     )
@@ -2669,6 +2704,7 @@ def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
                                 "endpoint": endpoint,
                                 "picpocket": picpocket,
                                 "local_actions": special_actions,
+                                "suggestions": suggestions,
                             },
                             name=f"{group}-{name}",
                         )
@@ -2685,6 +2721,7 @@ def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
                                 "endpoint": endpoint,
                                 "picpocket": picpocket,
                                 "local_actions": special_actions,
+                                "suggestions": suggestions,
                             },
                         )
                     )
@@ -2696,6 +2733,7 @@ def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
                                 "endpoint": endpoint,
                                 "picpocket": picpocket,
                                 "local_actions": special_actions,
+                                "suggestions": suggestions,
                             },
                             name=f"{group}-{name}",
                         )
@@ -2713,7 +2751,11 @@ def make_app(picpocket: PicPocket, local_actions: bool = False) -> Application:
 
 
 async def run_server(
-    picpocket: PicPocket, port: int = DEFAULT_PORT, local_actions: bool = False
+    picpocket: PicPocket,
+    port: int = DEFAULT_PORT,
+    *,
+    local_actions: bool = False,
+    suggestions: int = 0,
 ):
     """Run a PicPocket web server
 
@@ -2725,9 +2767,14 @@ async def run_server(
         port: The port to run the server on
         local_actions: Include endpoints designed for people only
             accessing PicPocket from their local machine.
+        suggestions: How many tags to suggest when editing images
     """
 
     shutdown = asyncio.Event()
-    application = make_app(picpocket, local_actions=local_actions)
+    application = make_app(
+        picpocket,
+        local_actions=local_actions,
+        suggestions=suggestions,
+    )
     application.listen(port)
     await shutdown.wait()

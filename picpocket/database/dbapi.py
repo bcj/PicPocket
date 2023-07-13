@@ -2718,6 +2718,41 @@ class DbApi(PicPocket, ABC):
 
         return tags
 
+    async def get_tag_set(self, *image_ids: int, minimum: int = 1) -> dict[str, int]:
+        tags = {}
+
+        async with (
+            await self.connect() as connection,
+            self.cursor(connection) as cursor,
+        ):
+            values = {"minimum": minimum or 0}  # or 0 to be nice to Nones
+            query = self.sql.format(
+                """
+                SELECT tag, COUNT(image) FROM image_tags
+                WHERE {}
+                GROUP BY tag
+                HAVING COUNT(image) >= {}
+                ORDER BY COUNT(image) DESC, tag ASC;
+                """,
+                Number("image", Comparator.EQUALS, list(image_ids)).prepare(
+                    self.sql, values
+                ),
+                self.sql.placeholder("minimum"),
+            )
+            await cursor.execute(query, values)
+
+            for tag_id, count in await cursor.fetchall():
+                await cursor.execute(
+                    f"SELECT name FROM tags WHERE id = {self.sql.param};",
+                    (tag_id,),
+                )
+                row = await cursor.fetchone()
+                if row:
+                    name = deserialize_tag(row[0])
+                    tags[name] = count
+
+        return tags
+
     async def _related_tags(self, cursor, tag: str) -> set[int]:
         await cursor.execute(
             f"""

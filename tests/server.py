@@ -24,9 +24,10 @@ async def temporary_server(port: int):
             await api.add_tag("fake/child/grandchild")
             await api.add_tag("another-tag")
             await api.add_tag("another-tag/child")
+            await api.add_task("copy", "camera", "main")
 
             try:
-                await run_server(api, port, local_actions=True)
+                await run_server(api, port, local_actions=True, suggestions=5)
             except KeyboardInterrupt:
                 pass
 
