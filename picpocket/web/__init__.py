@@ -54,6 +54,8 @@ class BaseHandler(RequestHandler):
         image: Optional[Image] = None,
         back: Optional[str] = None,
         forward: Optional[str] = None,
+        set_index: Optional[int] = None,
+        set_count: Optional[int] = None,
         query: Optional[str] = None,
         **kwargs,
     ):
@@ -64,6 +66,8 @@ class BaseHandler(RequestHandler):
             image: An image to display
             back: The path to the previous page in a set
             forward: The path to the next page in a set
+            set_index: The current position in a set
+            set_count: The number of images in a set
             query: Any query parameters to add to related paths
             kwargs: Any arguments to pass through
         """
@@ -72,6 +76,8 @@ class BaseHandler(RequestHandler):
             image=image,
             back=back or "",
             forward=forward or "",
+            set_index=set_index,
+            set_count=set_count,
             query=query or "",
             **kwargs,
         )
@@ -989,7 +995,7 @@ class ImagesGetHandler(BaseApiHandler):
         if location:
             location_name = location.name
 
-        back = forward = None
+        back = forward = index = count = None
         query = ""
         try:
             session_id = self.get_query_argument("set", None)
@@ -999,6 +1005,7 @@ class ImagesGetHandler(BaseApiHandler):
 
                 if data:
                     query = f"?set={session_id}"
+                    count = len(data["ids"])
                     index = data["ids"].index(image_id)
 
                     if index > 0:
@@ -1016,6 +1023,8 @@ class ImagesGetHandler(BaseApiHandler):
             location_name=location_name,
             back=back,
             forward=forward,
+            set_index=index,
+            set_count=count,
             query=query,
             local_actions=self.local_actions,
         )

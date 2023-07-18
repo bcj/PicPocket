@@ -16,18 +16,19 @@
 
         {% if image %}
         <h{{1 if image_ids is None else 2}}>{{image.title or f"Image {image.id}"}}</h{{1 if image_ids is None else 2}}>
+        {% if set_count and not image_ids %}<h4>{{set_index + 1}} of {{set_count}}</h4>{% end %}
 
         <article class="contents">
             {% module DisplayImage(image) %}
 
             <div class="box image-info">
                 <div id="image-actions" class="actions image-actions">
-                    {% if back %}<a href="{{back}}{{query}}">← Previous</a>{% end %}
+                    {% if back %}<a class="action-link" rel="prev" href="{{back}}{{query}}">← Previous</a>{% end %}
                     <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
                     <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
                     <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
                     {% if "show-in-finder" in local_actions %}<a class="action-link special-action" onClick="call_special_action('{{reverse_url("show-in-finder", image.id)}}', 'Show in finder')">Show in Finder</a>{% end %}
-                    {% if forward %}<a id="forward" href="{{forward}}{{query}}">Next →</a>{% end %}
+                    {% if forward %}<a id="forward" class="action-link" rel="next" href="{{forward}}{{query}}">Next →</a>{% end %}
                 </div>
                 <dl>
                     <dt>Id:</dt>

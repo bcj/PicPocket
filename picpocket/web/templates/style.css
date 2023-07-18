@@ -178,15 +178,6 @@ img {
     color: var(--accent-color);
 }
 
-.image-actions > a {
-    margin-left: 1em;
-    margin-right: 0em;
-}
-
-.image-actions > a:first-of-type {
-    margin-left: 0em;
-}
-
 .suggestion {
     width: 100%;
 }
