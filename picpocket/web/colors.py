@@ -9,6 +9,7 @@ class ColorScheme:
     text: str
     accent: str
     accent_text: str
+    link_accent: str
     border: str
     secondary: str
 
@@ -18,6 +19,7 @@ LIGHT = ColorScheme(
     text="black",
     accent="#820933",
     accent_text="#D0D8DC",
+    link_accent="#331774",
     border="#96A7B0",
     secondary="#8B9DA7",
 )
@@ -28,6 +30,7 @@ DARK = ColorScheme(
     text="#E7E9EE",
     accent="#E9B872",
     accent_text="black",
+    link_accent="#B0A3D4",
     border="#E7E9EE",
     secondary="#232A2E",
 )

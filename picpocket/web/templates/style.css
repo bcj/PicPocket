@@ -4,6 +4,7 @@
     --text-color: {{light.text}};
     --accent-color: {{light.accent}};
     --accent-text-color: {{light.accent_text}};
+    --link-accent: {{light.link_accent}};
     --border-color: {{light.border}};
 }
 
@@ -14,16 +15,17 @@
         --text-color: {{dark.text}};
         --accent-color: {{dark.accent}};
         --accent-text-color: {{dark.accent_text}};
+        --link-accent: {{dark.link_accent}};
         --border-color: {{dark.border}};
     }
+}
 
-    a:link {
-        color: #B0A3D4;
-    }
+a:link {
+    color: var(--link-accent);
+}
 
-    a:visited {
-        color: #FFDDE2;
-    }
+a:visited {
+    color: var(--link-accent);
 }
 
 nav {
@@ -154,9 +156,26 @@ img {
     flex-grow: 100;
 }
 
-.image-actions > button {
-    margin-left: 1em;
-    margin-right: 0em;
+.action-link {
+    background-color: var(--background-color);
+    border-color: var(--link-accent);
+    border-style: solid;
+    text-decoration: none;
+    border-radius: 0.5em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    padding-top: 0.25em;
+    padding-bottom: 0.25em;
+    text-align: center;
+}
+
+.action-link:hover {
+    background-color: var(--accent-text-color);
+    border-color: var(--accent-color);
+}
+
+.special-action {
+    color: var(--accent-color);
 }
 
 .image-actions > a {
