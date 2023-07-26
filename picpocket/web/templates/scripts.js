@@ -138,7 +138,7 @@ function create_tag_form(
     }
 }
 
-function add_tag(name) {
+function add_tag(name, show_alert = true) {
     input = document.getElementById("add-tag-" + name);
 
     tag_name = input.value;
@@ -163,7 +163,7 @@ function add_tag(name) {
         }
 
         input.value = "";
-    } else {
+    } else if (show_alert) {
         alert("Invalid tag name: '" + tag_name + "'");
     }
 
@@ -231,7 +231,11 @@ function remove_tag(name) {
     }
 }
 
-function select_all() {
+function select_all(name = undefined) {
+    if (name) {
+        add_tag(name, false)
+    }
+
     selects = document.getElementsByClassName("tag-list");
     if (selects) {
         for (select of selects) {

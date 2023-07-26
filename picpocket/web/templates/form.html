@@ -61,7 +61,7 @@
                 );
             }
 
-            document.getElementById("form").setAttribute("onsubmit", "return select_all()");
+            document.getElementById("form").setAttribute("onsubmit", "return select_all('" + name + "')");
         }
 
         window.addEventListener("DOMContentLoaded", setup_js);
