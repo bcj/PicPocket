@@ -90,6 +90,7 @@ class BaseHandler(RequestHandler):
         existing: Optional[dict[str, Any]] = None,
         known_tags: Optional[list[str]] = None,
         suggestions: Optional[list[str]] = None,
+        default_suggestions: Optional[list[str]] = None,
         **kwargs,
     ):
         if options is None:
@@ -108,6 +109,7 @@ class BaseHandler(RequestHandler):
             existing=existing,
             known_tags=known_tags,
             suggestions=suggestions,
+            default_suggestions=default_suggestions,
             **kwargs,
         )
 
@@ -1055,6 +1057,7 @@ class ImagesEditHandler(BaseApiHandler):
 
         known_tags = sorted(await self.api.all_tag_names())
 
+        default_suggestions = []
         suggestions = []
         session_id = self.get_query_argument("set", None)
         if self.suggestions and session_id:
@@ -1062,14 +1065,26 @@ class ImagesEditHandler(BaseApiHandler):
                 session = await self.api.get_session(int(session_id))
 
                 if session.get("suggestions"):
-                    count = 0
-                    for tag in await self.api.get_tag_set(*session["ids"]):
-                        if tag not in image.tags:
-                            suggestions.append(tag)
-                            count += 1
+                    ids = session["ids"]
+                    index = ids.index(image.id)
+                    del ids[index]
+                    if index > 0:
+                        previous_index = ids.pop(index - 1)
+                        previous = await self.api.get_image(previous_index, tags=True)
+                        if previous and previous.tags:
+                            for tag in previous.tags:
+                                if tag not in image.tags:
+                                    default_suggestions.append(tag)
 
-                            if count == self.suggestions:
-                                break
+                    if ids:
+                        count = 0
+                        for tag in await self.api.get_tag_set(*ids):
+                            if tag not in image.tags and tag not in default_suggestions:
+                                suggestions.append(tag)
+                                count += 1
+
+                                if count == self.suggestions:
+                                    break
             except Exception:
                 pass
 
@@ -1084,6 +1099,7 @@ class ImagesEditHandler(BaseApiHandler):
             image=image,
             known_tags=known_tags,
             suggestions=suggestions,
+            default_suggestions=default_suggestions,
         )
 
     async def post(self, image_id):

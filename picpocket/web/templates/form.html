@@ -50,12 +50,15 @@
         const KNOWN_TAGS = {% raw json_encode(known_tags) %};
         const CURRENT_TAGS = {% raw json_encode(existing_tags) %};
         const SUGGESTED_TAGS = {% raw json_encode(suggestions or []) %};
+        const DEFAULT_SUGGESTED_TAGS = {% raw json_encode(default_suggestions or []) %}
 
         function setup_js() {
             known_id = create_tag_list("form", KNOWN_TAGS);
 
             for ([name, tags] of Object.entries(CURRENT_TAGS)) {
-                create_tag_form("item-" + name, name, known_id, tags, SUGGESTED_TAGS);
+                create_tag_form(
+                    "item-" + name, name, known_id, tags, SUGGESTED_TAGS, DEFAULT_SUGGESTED_TAGS
+                );
             }
 
             document.getElementById("form").setAttribute("onsubmit", "return select_all()");

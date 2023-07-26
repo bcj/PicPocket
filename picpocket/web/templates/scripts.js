@@ -32,7 +32,9 @@ function create_tag_list(id, tag_list) {
     return datalist.id;
 }
 
-function create_tag_form(parent_id, name, known_id, tags, suggestions = undefined) {
+function create_tag_form(
+    parent_id, name, known_id, tags, suggestions = undefined, default_suggestions = undefined
+) {
     parent = document.getElementById(parent_id);
 
     add_form = document.createElement("form");
@@ -78,7 +80,18 @@ function create_tag_form(parent_id, name, known_id, tags, suggestions = undefine
     button.setAttribute("onclick", "remove_tag('" + name + "')");
     parent.appendChild(button);
 
-    if (suggestions != undefined && suggestions.length > 0) {
+    if (
+        (default_suggestions != undefined && default_suggestions.length > 0)
+        || (suggestions != undefined && suggestions.length > 0)
+    ) {
+        if (default_suggestions == undefined) {
+            default_suggestions = [];
+        }
+
+        if (suggestions == undefined) {
+            suggestions = [];
+        }
+
         suggestion_form = document.createElement("form")
         suggestion_form.id = "suggest-tag-form-" + name;
         suggestion_form.setAttribute("class", "suggestion");
@@ -95,7 +108,15 @@ function create_tag_form(parent_id, name, known_id, tags, suggestions = undefine
         select.setAttribute("name", select.id);
         select.setAttribute("class", "tag-list suggestion");
         select.setAttribute("multiple", true);
-        select.setAttribute("height", Math.min(suggestions.length, 10))
+        select.setAttribute("height", Math.min(default_suggestions.length + suggestions.length, 10))
+
+        for (tag of default_suggestions) {
+            option = document.createElement("option");
+            option.setAttribute("value", tag);
+            option.setAttribute("selected", true);
+            option.appendChild(document.createTextNode(tag));
+            select.appendChild(option);
+        }
 
         for (tag of suggestions) {
             option = document.createElement("option");
@@ -187,11 +208,24 @@ function add_suggested_tag(name) {
 }
 
 function remove_tag(name) {
-
     select = document.getElementById(name);
 
+    to_remove = [];
     for (option of select.children) {
         if (option.selected) {
+            to_remove.push(option);
+        }
+    }
+
+    if (to_remove.length == 1) {
+        input = document.getElementById("add-tag-" + name);
+        if (input && !input.value) {
+            input.value = to_remove[0].value;
+        }
+
+        to_remove[0].remove();
+    } else {
+        for (option of to_remove) {
             option.remove();
         }
     }
