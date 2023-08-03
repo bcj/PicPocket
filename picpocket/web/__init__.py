@@ -537,7 +537,9 @@ class LocationsImportHandler(BaseApiHandler):
         except Exception:
             raise HTTPError(400, f"Importing location failed: {name_or_id}")
 
-        await self.display_images(imported, "Imported")
+        await self.display_images(
+            imported, "Imported", suggestions=self.suggestions > 0
+        )
 
 
 class LocationsEditHandler(BaseApiHandler):
@@ -850,7 +852,7 @@ class ImagesSearchHandler(BaseApiHandler):
             **tag_kwargs,
         )
 
-        await self.display_images(ids)
+        await self.display_images(ids, suggestions=self.suggestions > 0)
 
 
 class ImagesUploadHandler(BaseApiHandler):
@@ -1407,7 +1409,7 @@ class TagsImagesHandler(BaseApiHandler):
         except Exception:
             raise HTTPError(500, "Finding tagged images failed")
 
-        await self.display_images(ids, "Tagged")
+        await self.display_images(ids, "Tagged", suggestions=self.suggestions > 0)
 
 
 class TasksHandler(BaseHandler):
