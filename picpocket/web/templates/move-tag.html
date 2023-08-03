@@ -1,0 +1,37 @@
+{% whitespace all %}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{title}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>{{title}}</h1>
+        <p>{{description}}</p>
+
+        <div class="contents">
+            <form id="form" class="box main-form" method="post">
+                <div class="form-item" id="item-new">
+                    <datalist id="known-tags">
+                        {% for tag in known_tags or [] %}
+                        <option value={{tag}} />
+                        {% end %}
+                    </datalist>
+                    <label for="new">The New Name</label>
+                    <input id="new" name="new" type="text" list="known-tags" title="Move child tags too" pattern="{{tag_pattern}}"" required value="{{current_name}}">
+                </div>
+
+                <div class="form-item" id="item-cascade">
+                    <label for="cascade">Cascade: </label>
+                    <input id="cascade" name="cascade" type="checkbox" title="Move child tags too" checked>
+                </div>
+                <input type="submit" value="{{submit}}">
+            </form>
+        </div>
+    </main>
+</body>
+</html>

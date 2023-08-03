@@ -119,6 +119,7 @@ class BaseHandler(RequestHandler):
             known_tags=known_tags,
             suggestions=suggestions,
             default_suggestions=default_suggestions,
+            tag_pattern=r"([^\/ ]([^\/]*[^\/ ])?)(?:\/[^\/ ]([^\/]*[^\/ ])?)*",
             **kwargs,
         )
 
@@ -1329,10 +1330,13 @@ class TagsMoveHandler(BaseApiHandler):
         if not name:
             raise HTTPError(400, "Please supply a tag name")
 
+        known_tags = sorted(await self.api.all_tag_names())
+
         self.write_form(
-            "form.html",
+            "move-tag.html",
             self.endpoint,
-            existing={"new": name, "cascade": True},
+            current_name=name,
+            known_tags=known_tags,
         )
 
     async def post(self):
@@ -2472,22 +2476,6 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
             "Move a tag to a new location.",
             handler=TagsMoveHandler,
             submit="move",
-            parameters=[
-                {
-                    "name": "new",
-                    "description": "The new name",
-                    "required": True,
-                    "input": "text",
-                    "label": "New Name:",
-                },
-                {
-                    "name": "cascade",
-                    "description": "Move child tags too",
-                    "required": False,
-                    "input": "checkbox",
-                    "label": "Cascade:",
-                },
-            ],
         ),
         "edit": Endpoint(
             f"{URL_BASE}/tag/edit",
