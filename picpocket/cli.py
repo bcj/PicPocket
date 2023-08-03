@@ -254,6 +254,14 @@ def build_meta(action) -> list[ArgumentParser]:
             "applied to that import set."
         ),
     )
+    web.add_argument(
+        "--suggestion-lookback",
+        default=25,
+        type=int,
+        help=(
+            "How many images on either side of the image to look at for tag suggestions"
+        ),
+    )
 
     importer = action.add_parser("import", description="Import a PicPocket backup")
     importer.add_argument("path", type=full_path, help="The backup to import")
@@ -292,6 +300,7 @@ async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
                     args.port,
                     local_actions=args.local_actions,
                     suggestions=args.suggestions,
+                    suggestion_lookback=args.suggestion_lookback,
                 )
             except KeyboardInterrupt:
                 print("shutting down")

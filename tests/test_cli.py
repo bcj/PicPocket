@@ -115,14 +115,26 @@ def test_build_meta(create_parser):
         port=DEFAULT_PORT,
         local_actions=True,
         suggestions=0,
+        suggestion_lookback=25,
     )
 
-    args = parser.parse_args(["web", "--port", "1234", "--suggestions", "3"])
+    args = parser.parse_args(
+        [
+            "web",
+            "--port",
+            "1234",
+            "--suggestions",
+            "3",
+            "--suggestion-lookback",
+            "4",
+        ]
+    )
     assert args == Namespace(
         command="web",
         port=1234,
         local_actions=False,
         suggestions=3,
+        suggestion_lookback=4,
     )
 
     # import

@@ -37,6 +37,15 @@ URL_BASE = f"/v{WEB_VERSION}"
 
 
 @dataclass(frozen=True)
+class Suggestions:
+    count: int
+    lookback: int
+
+    def __bool__(self) -> bool:
+        return bool(self.count and self.lookback)
+
+
+@dataclass(frozen=True)
 class Endpoint:
     path: str
     title: str
@@ -294,7 +303,7 @@ class BaseApiHandler(BaseHandler):
         endpoint: Endpoint,
         picpocket: PicPocket,
         local_actions: set[str],
-        suggestions: int,
+        suggestions: Suggestions,
     ):
         self.endpoint = endpoint
         self.api = picpocket
@@ -538,7 +547,7 @@ class LocationsImportHandler(BaseApiHandler):
             raise HTTPError(400, f"Importing location failed: {name_or_id}")
 
         await self.display_images(
-            imported, "Imported", suggestions=self.suggestions > 0
+            imported, "Imported", suggestions=bool(self.suggestions)
         )
 
 
@@ -625,7 +634,7 @@ class ImagesSearchHandler(BaseApiHandler):
         endpoint: Endpoint,
         picpocket: PicPocket,
         local_actions: set[str],
-        suggestions: int,
+        suggestions: Suggestions,
     ):
         self.endpoint = endpoint
         self.api = picpocket
@@ -852,7 +861,7 @@ class ImagesSearchHandler(BaseApiHandler):
             **tag_kwargs,
         )
 
-        await self.display_images(ids, suggestions=self.suggestions > 0)
+        await self.display_images(ids, suggestions=bool(self.suggestions))
 
 
 class ImagesUploadHandler(BaseApiHandler):
@@ -1078,14 +1087,16 @@ class ImagesEditHandler(BaseApiHandler):
                                 if tag not in image.tags:
                                     default_suggestions.append(tag)
 
-                    if ids:
+                    if ids and index > 0:
                         count = 0
-                        for tag in await self.api.get_tag_set(*ids):
+                        lower = max(0, index - self.suggestions.count)
+                        upper = index + self.suggestions.count
+                        for tag in await self.api.get_tag_set(*ids[lower:upper]):
                             if tag not in image.tags and tag not in default_suggestions:
                                 suggestions.append(tag)
                                 count += 1
 
-                                if count == self.suggestions:
+                                if count == self.suggestions.count:
                                     break
             except Exception:
                 pass
@@ -1409,7 +1420,7 @@ class TagsImagesHandler(BaseApiHandler):
         except Exception:
             raise HTTPError(500, "Finding tagged images failed")
 
-        await self.display_images(ids, "Tagged", suggestions=self.suggestions > 0)
+        await self.display_images(ids, "Tagged", suggestions=bool(self.suggestions))
 
 
 class TasksHandler(BaseHandler):
@@ -1539,7 +1550,7 @@ class TasksRunHandler(BaseApiHandler):
             raise HTTPError(400, repr(exception))
             raise HTTPError(400, "Running task failed")
 
-        await self.display_images(ids, "Copied", suggestions=self.suggestions > 0)
+        await self.display_images(ids, "Copied", suggestions=bool(self.suggestions))
 
 
 class TasksGetHandler(BaseApiHandler):
@@ -2648,16 +2659,16 @@ REPLACEMENTS: dict[str, dict[str, str]] = {
 def make_app(
     picpocket: PicPocket,
     *,
+    suggestions: Suggestions,
     local_actions: bool = False,
-    suggestions: int = 0,
 ) -> Application:
     """Make a tornado Application with all expected routing
 
     Args:
         picpocket: The API
+        suggestions: Information on how to give suggestions
         local_actions: Include endpoints designed for people only
             accessing PicPocket from their local machine.
-        suggestions: How many tags to suggest when editing images
 
     Returns:
         An instantiated tornado Application
@@ -2783,6 +2794,7 @@ async def run_server(
     *,
     local_actions: bool = False,
     suggestions: int = 0,
+    suggestion_lookback: int = 25,
 ):
     """Run a PicPocket web server
 
@@ -2795,13 +2807,15 @@ async def run_server(
         local_actions: Include endpoints designed for people only
             accessing PicPocket from their local machine.
         suggestions: How many tags to suggest when editing images
+        suggestion_lookback: How many images around the current one to
+        search for suggestions
     """
 
     shutdown = asyncio.Event()
     application = make_app(
         picpocket,
         local_actions=local_actions,
-        suggestions=suggestions,
+        suggestions=Suggestions(suggestions, suggestion_lookback),
     )
     application.listen(port)
     await shutdown.wait()
