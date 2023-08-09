@@ -1,0 +1,111 @@
+{% whitespace all %}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{title}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>{{title}}</h1>
+        <p>{{description}}</p>
+
+        <div class="contents">
+            <form id="form" class="box main-form" method="post" enctype="multipart/form-data">
+                <div class="form-item" id="item-file">
+                    <label for="file">Choose File: </label>
+                    <input id="file" name="file" title="The image to add" type="file" required>
+                </div>
+
+                <div class="form-item" id="item-location">
+                    <label for="location">Location: </label>
+                    <select id="location" name="location" title="The location to copy the image to" required>
+                        {% for location in locations %}
+                        <option value="{{location}}">{{location}}</option>
+                        {% end %}
+                    </select>
+                </div>
+
+                <div class="form-item" id="item-path">
+                    <label for="path">Path:</label>
+                    <input id="path" name="path" type="text" title="Where to save the image copy (relative to location)." required>
+                </div>
+
+                <div class="form-item" id="item-creator">
+                    <label for="creator">Creator:</label>
+                    <input id="creator" name="creator" type="text" title="Who created the image.">
+                </div>
+
+                <div class="form-item" id="item-title">
+                    <label for="title">Title:</label>
+                    <input id="title" name="title" type="text" title="The title of the image.">
+                </div>
+
+                <div class="form-item" id="item-caption">
+                    <label for="caption">Caption:</label>
+                    <input id="caption" name="caption" type="text" title="The caption of the image.">
+                </div>
+
+                <div class="form-item" id="item-alt">
+                    <label for="alt">Alt Text:</label>
+                    <input id="alt" name="alt" type="text" title="A description of the image.">
+                </div>
+
+                <div class="form-item" id="item-rating">
+                    <label for="rating">Rating:</label>
+                    <input id="rating" name="rating" type="number" title="Your rating of the image.">
+                </div>
+
+                <div class="form-item" id="item-tags">
+                    <label for="tags">Tags:</label>
+                    <datalist id="known-tags">
+                        {% for tag in known_tags or [] %}
+                        <option value={{tag}} />
+                        {% end %}
+                    </datalist>
+                    <noscript><textarea name="tags-list"></textarea></noscript>
+                </div>
+
+                <input type="submit" value="{{submit}}">
+            </form>
+        </div>
+    </main>
+    <script type="text/javascript" src="/scripts.js"></script>
+    <script type="text/javascript">
+        const KNOWN_TAGS = {% raw json_encode(known_tags) %};
+        {% if "choose-file" in local_actions %}
+        const URLS = {% raw json_encode({location: reverse_url("choose-file", "save", location, "") for location in locations}) %};
+
+        function choose_file() {
+            url = URLS[document.getElementById("location").value];
+            file = document.getElementById("file");
+            if (file && file.files.length > 0) {
+                url = url + file.files[0].name
+            }
+            file_dialog(url, 'path')
+        }
+        {% end %}
+
+        function setup_js() {
+            create_tag_form("item-tags", "tags", "known-tags", []);
+            document.getElementById("form").setAttribute("onsubmit", "return select_all('tags')");
+
+            {% if "choose-file" in local_actions %}
+            div = document.getElementById("item-path");
+
+            button = document.createElement("a");
+            button.setAttribute("class", "action-link special-action");
+            button.appendChild(document.createTextNode("Choose"));
+            button.setAttribute("onClick", "choose_file()");
+
+            div.appendChild(button);
+            {% end %}
+        }
+
+        window.addEventListener("DOMContentLoaded", setup_js);
+    </script>
+</body>
+</html>

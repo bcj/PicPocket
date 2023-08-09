@@ -938,8 +938,8 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             "path": {"type": "text", "value": None},
             "location": {
                 "type": "select",
-                "value": "any",
-                "options": ["any", "main", "other"],
+                "value": None,
+                "options": ["", "main", "other"],
             },
             "exif": {"type": "checkbox", "value": False},
         }

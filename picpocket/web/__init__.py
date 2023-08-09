@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from subprocess import check_call
+from subprocess import check_call, check_output
 from tempfile import TemporaryDirectory
 from typing import Any, Optional, cast
 
@@ -32,7 +32,9 @@ from picpocket.web.colors import DARK, LIGHT
 
 DEFAULT_MIME = "image/unknown"
 DEFAULT_PORT = 8888
-TEMPLATE_DIRECTORY = str(Path(__file__).absolute().parent / "templates")
+WEB_DIRECTORY = Path(__file__).absolute().parent
+SCRIPTS_DIRECTORY = WEB_DIRECTORY / "scripts"
+TEMPLATE_DIRECTORY = str(WEB_DIRECTORY / "templates")
 URL_BASE = f"/v{WEB_VERSION}"
 
 
@@ -401,7 +403,11 @@ class LocationsHandler(BaseHandler):
 
 class LocationsAddHandler(BaseApiHandler):
     def get(self):
-        self.write_form("form.html", self.endpoint)
+        self.write_form(
+            "add-location.html",
+            self.endpoint,
+            local_actions=self.local_actions,
+        )
 
     async def post(self):
         data = {}
@@ -459,7 +465,11 @@ class LocationsMountHandler(BaseApiHandler):
         if location is None:
             raise HTTPError(404, f"Unknown location: {name_or_id}")
 
-        self.write_form("form.html", self.endpoint, existing=location.serialize())
+        self.write_form(
+            "mount-location.html",
+            self.endpoint,
+            local_actions=self.local_actions,
+        )
 
     async def post(self, name_or_id):
         name_or_id = int_or_str(name_or_id)
@@ -559,11 +569,12 @@ class LocationsEditHandler(BaseApiHandler):
         if location is None:
             raise HTTPError(404, f"Unknown location: {name_or_id}")
 
-        existing = location.serialize()
-        existing["new_name"] = existing["name"]
-        existing["type"] = "Source" if existing["source"] else "Destination"
-
-        self.write_form("form.html", self.endpoint, existing=existing)
+        self.write_form(
+            "add-location.html",
+            self.endpoint,
+            local_actions=self.local_actions,
+            existing=location.serialize(),
+        )
 
     async def post(self, name_or_id):
         name_or_id = int_or_str(name_or_id)
@@ -868,20 +879,21 @@ class ImagesSearchHandler(BaseApiHandler):
 class ImagesUploadHandler(BaseApiHandler):
     async def get(self):
         locations = await self.api.list_locations()
-        options = {"location": []}
+        location_names = []
         for location in sorted(locations, key=lambda location: location.name):
             if location.destination:
-                options["location"].append(location.name)
+                location_names.append(location.name)
 
-        if not options["location"]:
+        if not location_names:
             raise HTTPError(400, "Create a destination location first")
 
         known_tags = sorted(await self.api.all_tag_names())
 
         self.write_form(
-            "form.html",
+            "upload-image.html",
             self.endpoint,
-            options=options,
+            local_actions=self.local_actions,
+            locations=location_names,
             known_tags=known_tags,
         )
 
@@ -930,7 +942,11 @@ class ImagesUploadHandler(BaseApiHandler):
 
 class ImagesFindHandler(BaseApiHandler):
     async def get(self):
-        self.write_form("form.html", self.endpoint)
+        self.write_form(
+            "find-image.html",
+            self.endpoint,
+            local_actions=self.local_actions,
+        )
 
     async def post(self):
         try:
@@ -957,11 +973,10 @@ class ImagesVerifyHandler(BaseApiHandler):
             options["location"].append(location.name)
 
         self.write_form(
-            "form.html",
+            "verify-images.html",
             self.endpoint,
-            existing={"location": None},
-            options=options,
-            none="any",
+            locations=locations,
+            local_actions=self.local_actions,
         )
 
     async def post(self):
@@ -1172,26 +1187,27 @@ class ImagesEditHandler(BaseApiHandler):
 
 class ImagesMoveHandler(BaseApiHandler):
     async def get(self, image_id):
-        image = await self.api.get_image(int(image_id), tags=True)
+        image = await self.api.get_image(int(image_id))
 
         if image is None:
             raise HTTPError(404, f"Unknown image: {image_id}")
 
-        existing = image.serialize()
-
         locations = await self.api.list_locations()
-        options = {"location": []}
+        location_names = []
+        current_location = None
         for location in sorted(locations, key=lambda location: location.name):
-            options["location"].append(location.name)
+            location_names.append(location.name)
             if location.id == image.location:
-                existing["location"] = location.name
+                current_location = location.name
 
         self.write_form(
-            "form.html",
+            "move-image.html",
             self.endpoint,
-            options=options,
-            existing=existing,
+            locations=location_names,
+            current_location=current_location,
+            current_path=image.path,
             image=image,
+            local_actions=self.local_actions,
         )
 
     async def post(self, image_id):
@@ -1201,6 +1217,13 @@ class ImagesMoveHandler(BaseApiHandler):
         location = await self.api.get_location(location_name)
         if location is None:
             raise HTTPError(400, f"Unknown location: {location_name}")
+
+        image = await self.api.get_image(int(image_id))
+        if image is None:
+            raise HTTPError(400, f"Unknown image: {image_id}")
+
+        if not path.suffix:
+            path = path / image.path.name
 
         location_id = location.id
 
@@ -1704,6 +1727,46 @@ class ShowInFinderHandler(RequestHandler):
         self.write("done")
 
 
+class AppleScriptDialogHandler(RequestHandler):
+    def initialize(self, picpocket: PicPocket):
+        self.api = picpocket
+
+    async def get(self, kind: str, location_name: str, filename: str):
+        script = SCRIPTS_DIRECTORY / "dialog.applescript"
+        command = ["osascript", str(script), kind]
+
+        location = None
+        if location_name:
+            location = await self.api.get_location(location_name)
+
+            if location is None:
+                raise HTTPError(404, f"Unknown location: {location_name}")
+
+            if location.path is None:
+                raise HTTPError(400, f"Location not mounted: {location_name}")
+
+            command.append(str(location.path))
+
+            if filename:
+                command.append(filename)
+        elif filename:
+            command.extend(["", filename])
+
+        try:
+            pathstr = check_output(command, text=True).strip()
+
+            if not pathstr:
+                raise HTTPError(400, "No file/folder selected")
+        except Exception:
+            raise HTTPError(500, "Choosing file failed")
+
+        if location and location.path:
+            pathstr = str(Path(pathstr).relative_to(location.path))
+
+        self.write(pathstr)
+        self.set_header("Content-Type", "text/plain")
+
+
 # UI modules
 
 
@@ -1801,60 +1864,6 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             ),
             handler=LocationsAddHandler,
             submit="Create",
-            parameters=[
-                {
-                    "name": "name",
-                    "description": (
-                        "What to call your location. Location names must be unique."
-                    ),
-                    "required": True,
-                    "input": "text",
-                    "label": "Name:",
-                },
-                {
-                    "name": "description",
-                    "description": "A brief explanation of what the location is",
-                    "required": False,
-                    "input": "textarea",
-                    "label": "Description:",
-                },
-                {
-                    "name": "path",
-                    "description": (
-                        "Where the location is on your computer. "
-                        "This should be left blank if the location isn't "
-                        "mounted in a consistent location, or if multiple "
-                        "devices share this path. This must be supplied if "
-                        "the location isn't removable."
-                    ),
-                    "required": False,
-                    "input": "text",
-                    "label": "Path:",
-                },
-                {
-                    "name": "type",
-                    "description": (
-                        "A source is a location images are imported from "
-                        "(e.g., a camera) or a destination that images are "
-                        "copied to (e.g., your Pictures directory). "
-                    ),
-                    "required": True,
-                    "input": "select",
-                    "options": ["Source", "Destination"],
-                    "label": "Type:",
-                },
-                {
-                    "name": "removable",
-                    "description": (
-                        "Whether the location is permanently mounted "
-                        "or removable media."
-                    ),
-                    "required": False,
-                    "default": True,
-                    "input": "checkbox",
-                    "label": "Removable:",
-                },
-            ],
         ),
         "list": Endpoint(
             f"{NAVBAR['locations'].path}/list",
@@ -1962,73 +1971,6 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             "Add a copy of an image to PicPocket.",
             handler=ImagesUploadHandler,
             submit="Upload",
-            parameters=[
-                {
-                    "name": "location",
-                    "description": "The location to copy the image to",
-                    "required": True,
-                    "input": "select",
-                    "label": "Location:",
-                },
-                {
-                    "name": "path",
-                    "description": (
-                        "Where to save the image copy (relative to location)"
-                    ),
-                    "required": False,
-                    "input": "text",
-                    "label": "Path:",
-                },
-                {
-                    "name": "file",
-                    "description": "The image to add",
-                    "required": True,
-                    "input": "file",
-                    "label": "Choose File:",
-                },
-                {
-                    "name": "creator",
-                    "description": "Who created the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Creator:",
-                },
-                {
-                    "name": "title",
-                    "description": "The title of the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Title:",
-                },
-                {
-                    "name": "caption",
-                    "description": "The caption of the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Caption:",
-                },
-                {
-                    "name": "alt",
-                    "description": "A description of the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Alt Text:",
-                },
-                {
-                    "name": "rating",
-                    "description": "Your rating of the image",
-                    "required": False,
-                    "input": "number",
-                    "label": "Rating:",
-                },
-                {
-                    "name": "tags",
-                    "description": "Tags to apply to the image.",
-                    "required": False,
-                    "input": "tags",
-                    "label": "Tags:",
-                },
-            ],
         ),
         "find": Endpoint(
             f"{NAVBAR['images'].path}/find",
@@ -2036,15 +1978,6 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             "Find an image from its full path.",
             handler=ImagesFindHandler,
             submit="Find",
-            parameters=[
-                {
-                    "name": "path",
-                    "description": "The full path to the image.",
-                    "required": True,
-                    "input": "text",
-                    "label": "Path:",
-                },
-            ],
         ),
         "verify": Endpoint(
             f"{NAVBAR['images'].path}/verify",
@@ -2052,31 +1985,6 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             "Check that images in PicPocket match images on-disk.",
             handler=ImagesVerifyHandler,
             submit="Verify",
-            parameters=[
-                {
-                    "name": "location",
-                    "description": "Only include images at this location",
-                    "required": False,
-                    "input": "select",
-                    "label": "Location:",
-                },
-                {
-                    "name": "path",
-                    "description": "Only include images within this directory.",
-                    "required": False,
-                    "input": "text",
-                    "label": "Path:",
-                },
-                {
-                    "name": "exif",
-                    "description": (
-                        "Update EXIF data info even if images haven't been modified."
-                    ),
-                    "required": False,
-                    "input": "checkbox",
-                    "label": "Reparse EXIF:",
-                },
-            ],
         ),
     },
     "tags": {
@@ -2209,15 +2117,6 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
             "Set the current path to a location.",
             handler=LocationsMountHandler,
             submit="Mount",
-            parameters=[
-                {
-                    "name": "path",
-                    "description": "Where the location should be mounted",
-                    "required": True,
-                    "input": "text",
-                    "label": "Path:",
-                },
-            ],
         ),
         "unmount": Endpoint(
             f"{URL_BASE}/location/{{id}}/unmount",
@@ -2278,59 +2177,6 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
             "Update information on an existing location.",
             handler=LocationsEditHandler,
             submit="Edit",
-            parameters=[
-                {
-                    "name": "new_name",
-                    "description": (
-                        "What to call your location. Location names must be unique."
-                    ),
-                    "required": False,
-                    "input": "text",
-                    "label": "Name:",
-                },
-                {
-                    "name": "description",
-                    "description": "A brief explanation of what the location is",
-                    "required": False,
-                    "input": "textarea",
-                    "label": "Description:",
-                },
-                {
-                    "name": "path",
-                    "description": (
-                        "Where the location is on your computer. "
-                        "This should be left blank if the location isn't "
-                        "mounted in a consistent location, or if multiple "
-                        "devices share this path. This must be supplied if "
-                        "the location isn't removable."
-                    ),
-                    "required": False,
-                    "input": "text",
-                    "label": "Path:",
-                },
-                {
-                    "name": "type",
-                    "description": (
-                        "A source is a location images are imported from "
-                        "(e.g., a camera) or a destination that images are "
-                        "copied to (e.g., your Pictures directory). "
-                    ),
-                    "required": True,
-                    "input": "select",
-                    "options": ["Source", "Destination"],
-                    "label": "Type:",
-                },
-                {
-                    "name": "removable",
-                    "description": (
-                        "Whether the location is permanently mounted "
-                        "or removable media."
-                    ),
-                    "required": False,
-                    "input": "checkbox",
-                    "label": "Removable:",
-                },
-            ],
         ),
         "remove": Endpoint(
             f"{URL_BASE}/location/{{id}}/remove",
@@ -2423,22 +2269,6 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
             "Move an image file.",
             handler=ImagesMoveHandler,
             submit="Move",
-            parameters=[
-                {
-                    "name": "path",
-                    "description": "The path (relative to the new location)",
-                    "required": True,
-                    "input": "text",
-                    "label": "Path:",
-                },
-                {
-                    "name": "location",
-                    "description": "The location to move the image to",
-                    "required": True,
-                    "input": "select",
-                    "label": "Location:",
-                },
-            ],
         ),
         "remove": Endpoint(
             f"{URL_BASE}/image/{{id}}/remove",
@@ -2677,17 +2507,27 @@ def make_app(
         tornado.web.url(r"/", RootHandler, name="root"),
     ]
 
-    special_actions = set()
+    special_actions = {}
     if local_actions:
         match sys.platform:
             case "darwin":
-                special_actions.add("show-in-finder")
+                special_actions["show-file"] = "Show in Finder"
                 routes.append(
                     tornado.web.url(
                         rf"{URL_BASE}/show-in-finder/(\d+)",
                         ShowInFinderHandler,
                         {"picpocket": picpocket},
-                        name="show-in-finder",
+                        name="show-file",
+                    )
+                )
+
+                special_actions["choose-file"] = "Choose File"
+                routes.append(
+                    tornado.web.url(
+                        rf"{URL_BASE}/macos-file-dialog/(\w+)/(.*)/(.*)",
+                        AppleScriptDialogHandler,
+                        {"picpocket": picpocket},
+                        name="choose-file",
                     )
                 )
 

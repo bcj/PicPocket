@@ -27,7 +27,7 @@
                     <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
                     <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
                     <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
-                    {% if "show-in-finder" in local_actions %}<a class="action-link special-action" onClick="call_special_action('{{reverse_url("show-in-finder", image.id)}}', 'Show in finder')">Show in Finder</a>{% end %}
+                    {% if "show-file" in local_actions %}<a class="action-link special-action" onClick="call_special_action('{{reverse_url("show-file", image.id)}}', '{{local_actions["show-file"]}}')">Show in Finder</a>{% end %}
                     {% if forward %}<a id="forward" class="action-link" rel="next" href="{{forward}}{{query}}">Next →</a>{% end %}
                 </div>
                 <dl>
@@ -93,8 +93,8 @@
             </div>
             {% end %}
         </article>
-        {% if "show-in-finder" in local_actions %}
-        <script type="text/javascript" src="/scripts.js"></script>
+        {% if local_actions %}
+        <script type="text/javascript" src="/scripts.js" />
         {% end %}
         {% end %}
     </main>

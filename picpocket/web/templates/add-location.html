@@ -1,0 +1,69 @@
+{% whitespace all %}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{title}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>{{title}}</h1>
+        <p>{{description}}</p>
+
+        <div class="contents">
+            <form id="form" class="box main-form" method="post">
+                <div class="form-item" id="item-name">
+                    {% if "name" in existing %}{% set name = "new_name" %}{% else %}{% set name = "name" %}{% end %}
+                    <label for="{{name}}">Name:</label>
+                    <input id="{{name}}" name="{{name}}" type="text" required title="What to call your location. Location names must be unique." value="{{existing.get('name', '')}}">
+                </div>
+
+                <div class="form-item" id="item-description">
+                    <label for="description">Description:</label>
+                    <textarea id="description" name="description" title="A brief explanation of what the location is.">{{existing.get('description', '')}}</textarea>
+                </div>
+
+                <div class="form-item" id="item-path">
+                    <label for="path">Path:</label>
+                    <input id="path" name="path" type="text" title="Where the location is on your computer. This should be left blank if the location isn't mounted in a consistent location, or if multiple devices share this path. This must be supplied if the location isn't removable." value="{{existing.get('path', '')}}">
+                </div>
+
+                <div class="form-item" id="item-type">
+                    <label for="type">Location: </label>
+                    <select id="type" name="type" title="A source is a location images are imported from (e.g., a camera) or a destination that images are copied to (e.g., your Pictures directory).">
+                        <option value="Source" {% if existing.get("source") %}selected{% end %}>Source</option>
+                        <option value="Destination" {% if existing.get("destination") %}selected{% end %}>Destination</option>
+                    </select>
+                </div>
+
+                <div class="form-item" id="item-removable">
+                    <label for="removable">Removable:</label>
+                    <input id="removable" name="removable" type="checkbox" title="Whether the location is permanently mounted or removable media." {% if existing.get("removable", True) %}checked{% end %}>
+                </div>
+
+                <input type="submit" value="{{submit}}">
+            </form>
+        </div>
+    </main>
+    {% if "choose-file" in local_actions %}
+    <script type="text/javascript" src="/scripts.js"></script>
+    <script type="text/javascript">
+        function setup_js() {
+            div = document.getElementById("item-path");
+
+            button = document.createElement("a");
+            button.setAttribute("class", "action-link special-action");
+            button.appendChild(document.createTextNode("Choose"));
+            button.setAttribute("onClick", "file_dialog('{{reverse_url('choose-file', 'folder', '', '')}}', 'path')");
+
+            div.appendChild(button);
+        }
+
+        window.addEventListener("DOMContentLoaded", setup_js);
+    </script>
+    {% end %}
+</body>
+</html>

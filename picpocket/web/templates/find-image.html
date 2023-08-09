@@ -1,0 +1,44 @@
+{% whitespace all %}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{title}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>{{title}}</h1>
+        <p>{{description}}</p>
+
+        <div class="contents">
+            <form id="form" class="box main-form" method="post">
+                <div class="form-item" id="item-path">
+                    <label for="path">Path:</label>
+                    <input id="path" name="path" type="text" required title="The full path to the image.">
+                </div>
+                <input type="submit" value="{{submit}}">
+            </form>
+        </div>
+    </main>
+    {% if "choose-file" in local_actions %}
+    <script type="text/javascript" src="/scripts.js"></script>
+    <script type="text/javascript">
+        function setup_js() {
+            div = document.getElementById("item-path");
+
+            button = document.createElement("a");
+            button.setAttribute("class", "action-link special-action");
+            button.appendChild(document.createTextNode("Choose"));
+            button.setAttribute("onClick", "file_dialog('{{reverse_url('choose-file', 'file', '', '')}}', 'path', 'form')");
+
+            div.appendChild(button);
+        }
+
+        window.addEventListener("DOMContentLoaded", setup_js);
+    </script>
+    {% end %}
+</body>
+</html>

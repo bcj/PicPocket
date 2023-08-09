@@ -6,13 +6,39 @@
     window.location.href = url;
 }
 
-function call_special_action(url, action) {
+function call_special_action(url, action, callback=undefined) {
     // call an endpoint in the background, showing an alert if it fails
     fetch(url).then(
         (response) => {
             if (response.status != 200) {
                 alert(action + " failed");
+            } else if (callback) {
+                callback(response)
             }
+        }
+    );
+}
+
+function file_dialog_from_key(urls, key_id, input_id, form_id=undefined) {
+    url = urls[document.getElementById(key_id).value];
+    file_dialog(url, input_id, form_id);
+}
+
+function file_dialog(url, input_id, form_id=undefined) {
+    call_special_action(
+        url,
+        "file dialog",
+        (response) => {
+            element = document.getElementById(input_id);
+            response.text().then(
+                (text) => {
+                    element.setAttribute("value", text);
+
+                    if (form_id) {
+                        document.getElementById(form_id).submit();
+                    }
+                }
+            );
         }
     );
 }
