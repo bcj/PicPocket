@@ -1,4 +1,7 @@
-{% whitespace all %}function go_to_action(placeholder) {
+{% whitespace all %}
+var last_removed = undefined;
+
+function go_to_action(placeholder) {
     // go to a link that requires filling in a placeholder value
     let id = document.getElementById("id").value;
     let format_string = document.getElementById("action").value;
@@ -189,6 +192,7 @@ function add_tag(name, show_alert = true) {
         }
 
         input.value = "";
+        last_removed = undefined;
     } else if (show_alert) {
         alert("Invalid tag name: '" + tag_name + "'");
     }
@@ -246,7 +250,7 @@ function remove_tag(name) {
     if (to_remove.length == 1) {
         input = document.getElementById("add-tag-" + name);
         if (input && !input.value) {
-            input.value = to_remove[0].value;
+            last_removed = input.value = to_remove[0].value;
         }
 
         to_remove[0].remove();
@@ -259,7 +263,10 @@ function remove_tag(name) {
 
 function select_all(name = undefined) {
     if (name) {
-        add_tag(name, false)
+        input = document.getElementById("add-tag-" + name);
+        if (input.value && input.value != last_removed) {
+            add_tag(name, false);
+        }
     }
 
     selects = document.getElementsByClassName("tag-list");
