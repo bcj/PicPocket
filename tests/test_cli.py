@@ -1315,6 +1315,7 @@ def test_parse_cli(tmp_path):
     args = parse_cli(tmp_path, ["initialize"])
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         command="initialize",
         directory=tmp_path / DEFAULT_DIRECTORY,
         backend=None,
@@ -1325,6 +1326,7 @@ def test_parse_cli(tmp_path):
     )
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         command="initialize",
         directory=Path("photo/directory"),
         backend="sqlite",
@@ -1337,6 +1339,7 @@ def test_parse_cli(tmp_path):
     )
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         command="initialize",
         directory=tmp_path / DEFAULT_DIRECTORY,
         backend="sqlite",
@@ -1349,6 +1352,7 @@ def test_parse_cli(tmp_path):
     )
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         command="initialize",
         directory=Path("photo/directory"),
         backend="postgres",
@@ -1365,6 +1369,7 @@ def test_parse_cli(tmp_path):
     args = parse_cli(tmp_path, ["import", "backup.json"])
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         config=tmp_path / DEFAULT_DIRECTORY,
         command="import",
         path=Path.cwd() / "backup.json",
@@ -1382,6 +1387,7 @@ def test_parse_cli(tmp_path):
     )
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         config=tmp_path / DEFAULT_DIRECTORY,
         command="location",
         subcommand="remove",
@@ -1393,6 +1399,7 @@ def test_parse_cli(tmp_path):
     args = parse_cli(tmp_path, ["task", "remove", "import-camera"])
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         config=tmp_path / DEFAULT_DIRECTORY,
         command="task",
         subcommand="remove",
@@ -1403,6 +1410,7 @@ def test_parse_cli(tmp_path):
     args = parse_cli(tmp_path, ["image", "find", "./image.png"])
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         config=tmp_path / DEFAULT_DIRECTORY,
         command="image",
         subcommand="find",
@@ -1418,6 +1426,7 @@ def test_parse_cli(tmp_path):
     )
     assert args == Namespace(
         log_level=logging.INFO,
+        log_directory=None,
         config=tmp_path / DEFAULT_DIRECTORY,
         command="tag",
         subcommand="add",

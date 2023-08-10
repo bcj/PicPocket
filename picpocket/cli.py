@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import sys
 from argparse import ArgumentParser, Namespace
 from datetime import datetime, timezone
 from enum import Enum
@@ -45,7 +46,34 @@ def main(
 
     logger = logging.getLogger("picpocket")
     logger.setLevel(level=args.log_level)
-    logger.addHandler(logging.StreamHandler())
+
+    handler: logging.Handler = logging.StreamHandler()
+    if args.command == "web" or args.log_directory:
+        specified = args.log_directory is not None
+
+        if not specified:
+            if sys.platform.startswith("win"):
+                args.log_directory = Path.home() / "Application Data" / "PicPocket"
+            elif sys.platform == "darwin":
+                args.log_directory = Path.home() / "Library" / "Logs" / "PicPocket"
+            else:
+                args.log_directory = Path("/var/log/PicPocket")
+
+        try:
+            args.log_directory.mkdir(exist_ok=True, parents=True)
+        except PermissionError:
+            if specified:
+                raise
+
+            print(f"could not access log directory: {args.log_directory}")
+        else:
+            handler = logging.handlers.TimedRotatingFileHandler(
+                args.log_directory / "error.log",
+                when="midnight",
+                backupCount=7,
+            )
+
+    logger.addHandler(handler)
 
     with asyncio.Runner() as runner:
         if args.command == "initialize":
@@ -223,6 +251,20 @@ def parse_cli(
             action="store_const",
             const=logging.DEBUG,
             help="Show debug logs",
+        )
+        leaf.add_argument(
+            "--log-directory",
+            type=full_path,
+            help=(
+                "Where to write log errors to. If unsupplied, logs will "
+                "be written to stderr if running the CLI and to the "
+                "platform-appropriate directory if running the web "
+                "server and PicPocket has the appropriate permissions "
+                "to write to that directory. On macos, logs will be "
+                "written to ~/Library/Logs/PicPocket, on Windows, "
+                "\\%Username\\%\\Application Data\\PicPocket, and "
+                "everywhere else /var/log/PicPocket."
+            ),
         )
 
     return parser.parse_args(input_args)
