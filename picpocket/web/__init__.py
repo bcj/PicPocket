@@ -2156,7 +2156,7 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                     "name": "batch_size",
                     "description": "Have PicPocket save changes after this many images",
                     "required": False,
-                    "input": "text",
+                    "input": "number",
                     "label": "Batch Size:",
                 },
                 {
