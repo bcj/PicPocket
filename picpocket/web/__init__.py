@@ -1022,7 +1022,7 @@ class ImagesSearchHandler(BaseApiHandler):
                     ids = await self.api.get_image_ids(
                         filter,
                         reachable=reachable,
-                        order=order,
+                        order=("random",),
                         limit=1,
                         offset=None,
                         tagged=tagged,
