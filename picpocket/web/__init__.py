@@ -12,7 +12,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from subprocess import check_call, check_output
 from tempfile import TemporaryDirectory
@@ -127,7 +127,7 @@ class BaseHandler(RequestHandler):
 
     def join_filters(
         self,
-        filters: dict[str, logic.Comparison],
+        filters: list[logic.Comparison],
         strategy: str,
         pattern: Optional[str] = None,
     ) -> Optional[logic.Comparison]:
@@ -135,7 +135,7 @@ class BaseHandler(RequestHandler):
             if not filters:
                 return None
             elif len(filters) == 1:
-                return list(filters.values())[0]
+                return filters[0]
 
             match strategy.lower():
                 case "any":
@@ -145,7 +145,7 @@ class BaseHandler(RequestHandler):
                 case _:
                     raise HTTPError(400, f"Unknown join strategy: {strategy}")
 
-            return combiner(*filters.values())
+            return combiner(*filters)
 
         raise HTTPError(500, "TODO: pattern support. sorry!")
 
@@ -652,41 +652,161 @@ class ImagesSearchHandler(BaseApiHandler):
         self.api = picpocket
         self.local_actions = local_actions
         self.suggestions = suggestions
-        self.parameters: list[dict[str, Any]] = []
+        self.types = {
+            "number": [
+                ["<", {"input": "number"}],
+                ["≤", {"input": "number"}],
+                ["=", {"input": "number"}],
+                ["≥", {"input": "number"}],
+                [">", {"input": "number"}],
+                ["≠", {"input": "number"}],
+                ["is set", {"value": None}],
+                ["isn't set", {"value": None}],
+            ],
+            "date": [
+                ["<", {"input": "date"}],
+                ["≤", {"input": "date"}],
+                ["=", {"input": "date"}],
+                ["≥", {"input": "date"}],
+                [">", {"input": "date"}],
+                ["≠", {"input": "date"}],
+                ["is set", {"value": None}],
+                ["isn't set", {"value": None}],
+            ],
+            "text": [
+                ["is", {"input": "text"}],
+                ["is not", {"input": "text"}],
+                ["starts with", {"input": "text"}],
+                ["doesn't start with", {"input": "text"}],
+                ["ends with", {"input": "text"}],
+                ["doesn't end with", {"input": "text"}],
+                ["contains", {"input": "text"}],
+                ["doesn't contain", {"input": "text"}],
+                ["is set", {"value": None}],
+                ["isn't set", {"value": None}],
+            ],
+            "any": [
+                ["<", {"input": "number"}],
+                ["≤", {"input": "number"}],
+                ["=", {"input": "number"}],
+                ["≥", {"input": "number"}],
+                [">", {"input": "number"}],
+                ["≠", {"input": "number"}],
+                ["is", {"input": "text"}],
+                ["is not", {"input": "text"}],
+                ["starts with", {"input": "text"}],
+                ["doesn't start with", {"input": "text"}],
+                ["ends with", {"input": "text"}],
+                ["doesn't end with", {"input": "text"}],
+                ["contains", {"input": "text"}],
+                ["doesn't contain", {"input": "text"}],
+                ["is set", {"value": None}],
+                ["isn't set", {"value": None}],
+            ],
+        }
         self.properties = None
-        self.order: list[str] = []
+        self.order: list[list[str]] = [
+            ["Name", "name", "The image file name (without extension)"],
+            ["Extension", "extension", "The image file suffix"],
+            ["Creator", "creator", "Who you listed as the author of the image"],
+            ["Location", "location", "Which device the image is stored on"],
+            [
+                "Path",
+                "path",
+                "The path to the image file (relative to the location root)",
+            ],
+            ["Title", "title", "The title you gave the image"],
+            ["Caption", "caption", "The caption you gave the image"],
+            ["Alt", "alt", "The descriptive text you gave the image"],
+            ["Rating", "rating", "What you rated the image"],
+            ["Creation Date", "creation_date", "When the image was made"],
+            [
+                "Last-Modified Date",
+                "last_modified",
+                "When the image file was last modified",
+            ],
+        ]
 
     async def get(self):
-        if not self.properties:
-            for parameter in self.endpoint.parameters:
-                if parameter["name"] == "filter":
-                    self.properties = parameter["properties"]
-                elif parameter["name"] == "order":
-                    self.order = parameter["options"]
-                else:
-                    self.parameters.append(parameter)
+        existing_filters = []
+
+        try:
+            num_filters = max(0, int(self.get_query_argument("filters")))
+
+            for index in range(1, num_filters + 1):
+                existing_filters.append(
+                    (
+                        self.get_query_argument(f"filter-parameter-{index}", ""),
+                        self.get_query_argument(f"filter-comparison-{index}", ""),
+                        self.get_query_argument(f"filter-value-{index}", ""),
+                    )
+                )
+        except Exception:
+            pass
+
+        filter_strategy = self.get_query_argument("filter-strategy", "all")
 
         locations = ["any"]
         for location in await self.api.list_locations():
             locations.append(location.name)
 
-        for filter_property in self.properties:
-            if filter_property[0] == "location":
-                filter_property[1]["options"] = locations
+        filters = [
+            ["name", {"label": "Name", "type": "text"}],
+            ["extension", {"label": "Extension", "type": "text"}],
+            ["creator", {"label": "Creator", "type": "text"}],
+            [
+                "location",
+                {"label": "Location", "type": "option", "options": locations},
+            ],
+            ["path", {"label": "Path", "type": "text"}],
+            ["title", {"label": "Title", "type": "text"}],
+            ["caption", {"label": "Caption", "type": "text"}],
+            ["alt", {"label": "Alt", "type": "text"}],
+            ["rating", {"label": "Rating", "type": "number"}],
+            ["creation_date", {"label": "Creation Date", "type": "date"}],
+            [
+                "last_modified",
+                {"label": "Last-Modified Date", "type": "date"},
+            ],
+        ]
 
         known_tags = sorted(await self.api.all_tag_names())
+
+        order_properties = self.get_query_arguments("order-property")
+        order_properties.extend([""] * (len(self.order) - len(order_properties)))
+
+        order_directions = self.get_query_arguments("order-direction")
+        order_directions.extend(
+            ["ascending"] * (len(self.order) - len(order_directions))
+        )
+
+        order_nulls = self.get_query_arguments("order-nulls")
+        order_nulls.extend(["last"] * (len(self.order) - len(order_nulls)))
+
+        ordering = list(zip(order_properties, order_directions, order_nulls))
 
         self.render_web(
             "search.html",
             title=self.endpoint.title,
             description=self.endpoint.description,
             submit=self.endpoint.submit,
-            parameters=self.properties,
-            other_parameters=self.parameters,
+            existing_filters=existing_filters,
+            filter_strategy=filter_strategy,
+            reachable=self.get_query_argument("reachable", None),
+            tagged=self.get_query_argument("tagged", None),
+            any_tags=self.get_query_arguments("any"),
+            all_tags=self.get_query_arguments("all"),
+            no_tags=self.get_query_arguments("no"),
+            ordering=ordering,
+            limit_type=self.get_query_argument("limit-type", None),
+            limit=self.get_query_argument("limit", None) or "",
+            offset=self.get_query_argument("offset", None) or "",
+            span=self.get_query_argument("span", None) or "",
+            span_type=self.get_query_argument("span-type", None),
+            filters=filters,
+            types=self.types,
             order=self.order,
-            properties=self.properties,
             known_tags=known_tags,
-            existing={},
         )
 
     async def post(self):
@@ -780,7 +900,9 @@ class ImagesSearchHandler(BaseApiHandler):
                         f"Invalid value for filter{index}-parameter: {parameter}",
                     )
 
-        filter = self.join_filters(filters, join["strategy"], join["pattern"])
+        filter = self.join_filters(
+            list(filters.values()), join["strategy"], join["pattern"]
+        )
 
         order = []
         index = 1
@@ -811,24 +933,6 @@ class ImagesSearchHandler(BaseApiHandler):
 
         if not order:
             order = None
-
-        limitstr = self.get_body_argument("limit", None)
-        if limitstr:
-            try:
-                limit = int(limitstr)
-            except Exception:
-                raise HTTPError(f"Invalid limit: {limitstr}")
-        else:
-            limit = None
-
-        offsetstr = self.get_body_argument("offset", None)
-        if offsetstr:
-            try:
-                offset = int(offsetstr)
-            except Exception:
-                raise HTTPError(f"Invalid offset: {offsetstr}")
-        else:
-            offset = None
 
         reachablestr = self.get_body_argument("reachable", None)
         if reachablestr:
@@ -862,6 +966,86 @@ class ImagesSearchHandler(BaseApiHandler):
 
             if tags:
                 tag_kwargs[option] = tags
+
+        limit_type = self.get_body_argument("limit-type", None)
+        if limit_type == "count":
+            limitstr = self.get_body_argument("limit", None)
+            if limitstr:
+                try:
+                    limit = int(limitstr)
+                except Exception:
+                    raise HTTPError(f"Invalid limit: {limitstr}")
+            else:
+                limit = None
+
+            offsetstr = self.get_body_argument("offset", None)
+            if offsetstr:
+                try:
+                    offset = int(offsetstr)
+                except Exception:
+                    raise HTTPError(f"Invalid offset: {offsetstr}")
+            else:
+                offset = None
+        else:
+            limit = None
+            offset = None
+
+            spanstr = self.get_body_argument("span", None)
+            if spanstr:
+                try:
+                    span = int(spanstr) / 2
+                except Exception:
+                    raise HTTPError(f"Invalid span: {spanstr}")
+
+                if span:
+                    span_type = self.get_body_argument("span-type", None)
+                    match span_type:
+                        case "minutes":
+                            offset = timedelta(minutes=span)
+                        case "hours":
+                            offset = timedelta(hours=span)
+                        case "days":
+                            offset = timedelta(days=span)
+
+                    time_filter = logic.DateTime(
+                        "creation_date",
+                        logic.Comparator.EQUALS,
+                        None,
+                        invert=True,
+                    )
+
+                    if filter:
+                        filter = logic.And(filter, time_filter)
+                    else:
+                        filter = time_filter
+
+                    ids = await self.api.get_image_ids(
+                        filter,
+                        reachable=reachable,
+                        order=order,
+                        limit=1,
+                        offset=None,
+                        tagged=tagged,
+                        **tag_kwargs,
+                    )
+
+                    if ids:
+                        image = await self.api.get_image(ids[0])
+
+                        if image and image.creation_date:
+                            filter = logic.And(
+                                filter,
+                                logic.DateTime(
+                                    "creation_date",
+                                    logic.Comparator.GREATER_EQUALS,
+                                    image.creation_date - offset,
+                                ),
+                                logic.DateTime(
+                                    "creation_date",
+                                    logic.Comparator.LESS_EQUALS,
+                                    image.creation_date + offset,
+                                ),
+                            )
 
         ids = await self.api.get_image_ids(
             filter,
@@ -1879,91 +2063,6 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             "Find images stored in PicPocket",
             handler=ImagesSearchHandler,
             submit="Search",
-            parameters=[
-                {
-                    "name": "filter",
-                    "description": "Filter results based on one or more property.",
-                    "required": False,
-                    "type": "filter",
-                    "properties": [
-                        ["name", {"label": "Name", "type": "text"}],
-                        ["extension", {"label": "Extension", "type": "text"}],
-                        ["creator", {"label": "Creator", "type": "text"}],
-                        ["location", {"label": "Location", "type": "option"}],
-                        ["path", {"label": "Path", "type": "text"}],
-                        ["title", {"label": "Title", "type": "text"}],
-                        ["caption", {"label": "Caption", "type": "text"}],
-                        ["alt", {"label": "Alt", "type": "text"}],
-                        ["rating", {"label": "Rating", "type": "number"}],
-                        ["creation_date", {"label": "Creation Date", "type": "date"}],
-                        [
-                            "last_modified",
-                            {"label": "Last-Modified Date", "type": "date"},
-                        ],
-                    ],
-                },
-                {
-                    "name": "order",
-                    "description": "The order to sort images.",
-                    "required": False,
-                    "type": "order",
-                    "options": [
-                        ["Name", "name"],
-                        ["Extension", "extension"],
-                        ["Creator", "creator"],
-                        ["Location", "location"],
-                        ["Path", "path"],
-                        ["Title", "title"],
-                        ["Caption", "caption"],
-                        ["Alt", "alt"],
-                        ["Rating", "rating"],
-                        ["Creation Date", "creation_date"],
-                        ["Last-Modified Date", "last_modified"],
-                    ],
-                },
-                {
-                    "name": "reachable",
-                    "description": "Whether the image file is currently accessible",
-                    "required": False,
-                    "type": "select",
-                    "input": "select",
-                    "options": ["", "No", "Yes"],
-                    "label": "Reachable:",
-                },
-                {
-                    "name": "tagged",
-                    "description": "Whether the image has been tagged.",
-                    "required": False,
-                    "type": "select",
-                    "input": "select",
-                    "options": ["", "No", "Yes"],
-                    "label": "Tagged:",
-                },
-                {
-                    "name": "any_tags",
-                    "description": "Only return images with at least one matching tag.",
-                    "required": False,
-                    "type": "text",
-                    "input": "tags",
-                    "label": "Any Tags:",
-                },
-                {
-                    "name": "all_tags",
-                    "description": "Only return images with all supplied tags",
-                    "required": False,
-                    "type": "text",
-                    "input": "tags",
-                    "label": "All Tags:",
-                },
-                {
-                    "name": "no_tags",
-                    "description": "Only return images without any supplied tags",
-                    "required": False,
-                    "type": "text",
-                    "input": "tags",
-                    "label": "No Tags:",
-                },
-            ],
         ),
         "upload": Endpoint(
             f"{NAVBAR['images'].path}/upload",

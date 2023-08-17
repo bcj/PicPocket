@@ -19,17 +19,9 @@
 			<details>
 				<summary>More Info</summary>
 				<dl>
-					<dt>Name</dt><dd>The image file name (without extension)</dd>
-					<dt>Extension</dt><dd>The image file suffix</dd>
-					<dt>Creator</dt><dd>Who you listed as the author of the image</dd>
-					<dt>Location</dt><dd>Which device the image is stored on</dd>
-					<dt>Path</dt><dd>The path to the image file (relative to the location root)</dd>
-					<dt>Title</dt><dd>The title you gave the image</dd>
-					<dt>Caption</dt><dd>The caption you gave the image</dd>
-					<dt>Alt</dt><dd>The descriptive text you gave the image</dd>
-					<dt>Rating</dt><dd>What you rated the image</dd>
-					<dt>Creation Date</dt><dd>When the image was made</dd>
-					<dt>Last-Modified Date</dt><dd>When the image file was last modified</dd>
+					{% for label, _, item_description in order %}
+					<dt>{{label}}</dt><dd>{{item_description}}</dd>
+					{% end %}
 				</dl>
 			</details>
 			<br>
@@ -37,95 +29,68 @@
 			<div id=join>
 				<label for="join-strategy">Match:</label>
 				<select id="join-strategy" name="join-strategy" onchange="set_join_visibility()">
-					<option value="all" selected>All Filters</option>
-					<option value="any">Any Filter</option>
-					{% if False %}<option value="pattern">Pattern</option>{% end %}
+					{% for strategy in ["All", "Any"] %}
+					<option value="{{strategy.lower()}}"{% if strategy.lower() == filter_strategy %} selected{% end %}>{{strategy}} Filters</option>
+					{% end %}
 				</select>
-				{% if False %}
-				<span id="join-pattern-div">
-					<label for="join-pattern">Pattern:</label>
-					<input type="text" name="join-pattern" pattern="^(\d|and|or|[() ])*$" placeholder="1 and (2 or 3)">
-				</span>
-				{% end %}
 			</div>
 			<div id="filters" class="form-group">
 				<noscript>
-					{% set parameter_types = set() %}{% for _, info in parameters %}{{parameter_types.add(info["type"]) or ""}}{% end %}
-					{% for index in range(5) %}
+					{% for index in range(len(existing_filters) or 5) %}
 					<div class="filter-item">
 						{{index + 1}}:
 						<select id="filter{{index + 1}}-parameter" name="filter{{index + 1}}-parameter">
 						<option value="" selected></option>
-						{% for name, info in parameters %}
+						{% for name, info in filters %}
 							<option value="{{name}}">{{info["label"]}}</option>
 						{% end %}
 						</select>
 						<select id="filter{{index + 1}}-comparison" name="filter{{index + 1}}-comparison">
-							{% if "number" in parameter_types or "date" in parameter_types %}
-							<option value="=">=</option>
-							<option value="≠">≠</option>
-							{% elif "text" in parameter_types %}
-							<option value="is">is</option>
-							<option value="is not">is not</option>
-							{% elif "option" in parameter_types %}
-							<option value="is">is</option>
-							{% end %}
-							{% if "number" in parameter_types or "date" in parameter_types or "text" in parameter_types %}
-							<option value="is set">is set</option>
-							<option value="isn't set">isn't set</option>
-							{% end %}
-							{% if "number" in parameter_types or "date" in parameter_types %}
-							<option value="<"><</option>
-							<option value="≤">≤</option>
-							<option value="≥">≥</option>
-							<option value=">">></option>
-							{% end %}
-							{% if "text" in parameter_types %}
-							<option value="starts with">starts with</option>
-							<option value="ends with">ends with</option>
-							<option value="contains">contains</option>
-							<option value="doesn't start with">doesn't start with</option>
-							<option value="doesn't end with">doesn't end with</option>
-							<option value="doesn't contain">doesn't contain</option>
-							{% end %}
-							{% if "list" in parameter_types %}
-							<option value="matches any">matches any</option>
-							<option value="matches all">matches all</option>
-							<option value="matches none">matches none</option>
+							{% for option, _ in types["any"] %}
+							<option value="{{option}}">{{option}}</option>
 							{% end %}
 						</select>
-						{% if "list" in parameter_types %}
-						<textarea id="filter{{index + 1}}-value" name="filter{{index + 1}}-value" rows="1"></textarea>
-						{% else %}
-						<input type="{% if len(parameter_types) == 1 %}{{list(parameter_types)[0]}}{% else %}{{'text'}}{% end %}" id="filter{{index + 1}}-value" name="filter{{index + 1}}-value">
-						{% end %}
+						<input type="text" id="filter{{index + 1}}-value" name="filter{{index + 1}}-value">
 					</div>
 					{% end %}
 				</noscript>
 			</div>
 			<button id="add-filter" type="button" onclick="add_filter()" hidden>Add Filter</button>
-			{% if other_parameters %}{% set existing_tags = {} %}
 			<h5>Additional Filters</h5>
-			{% for field in other_parameters %}
-            <div id="item-{{field['name']}}" class="form-item">
-                <label for="{{field['name']}}" title="{{field['description']}}">{{field["label"]}}</label>
-                {% if field['input'] == "select" %}
-                <select name="{{field['name']}}" title="{{field['description']}}">
-                {% for option in (field['options']) %}
-                    <option value="{{option}}">{{option}}</option>
+			<div id="item-reachable" class="form-item">
+				<label for="reachable">Reachable:</label>
+				<select id="reachable" name="reachable" title="Whether the image file is currently accessible">
+					{% for value in ["", "No", "Yes"] %}
+					<option value="{{value}}"{% if reachable == value %} selected{% end %}>{{value}}</option>
+					{% end %}
+				</select>
+			</div>
+			<div id="item-tagged" class="form-item">
+				<label for="tagged">Tagged:</label>
+				<select id="tagged" name="tagged" title="Whether the image has been tagged">
+					{% for value in ["", "No", "Yes"] %}
+					<option value="{{value}}"{% if tagged == value %} selected{% end %}>{{value}}</option>
+					{% end %}
+				</select>
+			</div>
+			<datalist id="known-tags">
+                {% for tag in known_tags or [] %}
+                <option value={{tag}} />
                 {% end %}
-                </select>
-                {% elif field['input'] == "textarea" %}
-                <br><textarea class="text" name={{field['name']}} title="{{field['description']}}" rows=3></textarea>
-                {% elif field['input'] == "tags" %}{% set existing_tags[field["name"]] = existing.get(field["name"], []) %}
-                    <noscript><textarea name="{{field['name']}}-list">{{"\n".join((existing.get(field['name'])) or "")}}</textarea></noscript>
-                {% else %}
-                <input type="{{field['input']}}" name="{{field['name']}}" title="{{field['description']}}" {% if field["required"] %} required{% end %}{% if field["input"] == "checkbox"and field.get("default") %} checked{% end %}>
-                {% end %}
-            </div>
-            {% end%}
-            {% end %}
-			{% if order %}
+            </datalist>
+			<div id="item-any_tags" class="form-item">
+				<label for="any_tags">Any Tags:</label>
+				<noscript><textarea id="any_tags-list" name="any_tags-list" title="Only return images with at least one matching tag."></textarea></noscript>
+			</div>
+			<div id="item-all_tags" class="form-item">
+				<label for="all_tags">All Tags:</label>
+				<noscript><textarea id="all_tags-list" name="all_tags-list" title="Only return images with all supplied tags."></textarea></noscript>
+			</div>
+			<div id="item-no_tags" class="form-item">
+				<label for="no_tags">No Tags:</label>
+				<noscript><textarea id="no_tags-list" name="no_tags-list" title="Only return images without any supplied tags."></textarea></noscript>
+			</div>
+
 			<div id="order" class="form-group">
 				<h4>Order</h4>
 
@@ -137,54 +102,75 @@
 						If multiple properties are supplied, each subsequent property will be used to break ties in the previous property.
 					</p>
 					<dl>
-						<dt>Name</dt><dd>The image file name (without extension)</dd>
-						<dt>Extension</dt><dd>The image file suffix</dd>
-						<dt>Creator</dt><dd>Who you listed as the author of the image</dd>
-						<dt>Location</dt><dd>Which device the image is stored on</dd>
-						<dt>Path</dt><dd>The path to the image file (relative to the location root)</dd>
-						<dt>Title</dt><dd>The title you gave the image</dd>
-						<dt>Caption</dt><dd>The caption you gave the image</dd>
-						<dt>Alt</dt><dd>The descriptive text you gave the image</dd>
-						<dt>Rating</dt><dd>What you rated the image</dd>
-						<dt>Creation Date</dt><dd>When the image was made</dd>
-						<dt>Last-Modified Date</dt><dd>When the image file was last modified</dd>
+						{% for label, _, item_description in order %}
+						<dt>{{label}}</dt><dd>{{item_description}}</dd>
+						{% end %}
 						<dt>Random</dt><dd>Randomize the order</dd>
 					</dl>
 				</details>
 				<br>
 
 				<div id="columns">
-				{% for index in range(len(order)) %}
+				{% for index, (property, direction, null) in enumerate(ordering) %}
 					<div id="order{{index + 1}}" class="order-group">
-						<select id="order{{index + 1}}-property" name="order{{index + 1}}-property">
-							<option value="" selected></option>
-							{% for option_name, option_value in order %}
-							<option value="{{option_value}}">{{option_name}}</option>
+						<select id="order{{index + 1}}-property" name="order{{index + 1}}-property" class="order-property">
+							<option value=""></option>
+							{% for label, value, _ in order %}
+							<option value="{{value}}"{% if value == property %} selected{% end %}>{{label}}</option>
 							{% end %}
-							<option value="random">Random</option>
+							<option value="random"{% if "random" == property %} selected{% end %}>Random</option>
 						</select>
-						<select id="order{{index + 1}}-direction" name="order{{index + 1}}-direction">
-							<option value="ascending" selected>ascending</option>
-							<option value="descending">descending</option>
+						<select id="order{{index + 1}}-direction" name="order{{index + 1}}-direction" class="order-direction">
+							{% for value in ["ascending", "descending"] %}
+							<option value="{{value}}"{% if value == direction %} selected{% end %}>{{value}}</option>
+							{% end %}
 						</select>
-						<select id="order{{index + 1}}-nulls" name="order{{index + 1}}-nulls">
-							<option value="first">blanks first</option>
-							<option value="last" selected>blanks last</option>
+						<select id="order{{index + 1}}-nulls" name="order{{index + 1}}-nulls" class="order-nulls">
+							{% for value in ["first", "last"] %}
+							<option value="{{value}}"{% if value == null %} selected{% end %}>blanks {{value}}</option>
+							{% end %}
 						</select>
 					</div>
 				{% end %}
 				</div>
 				<br>
+			</div>
+
+			<div id="limits">
+				<h4>Limits</h4>
+
+				<p>How to limit the number of images to return</p>
 				<div class="form-item">
-					<label for="limit" title="Only return this many images">Limit:</label>
-					<input type="number" id="limit" name="limit" title="Only return this many images">
+					<label for="limit-type">Limit by:</label>
+					<select id="limit-type" name="limit-type">
+						{% for option in ["count", "time"] %}
+						<option value="{{option}}"{% if option == limit_type %} selected{% end %}>{{option}}</option>
+						{% end %}
+					</select>
 				</div>
-				<div id="offset-group" class="form-item">
-					<label for="offset" title="Ignored unless limit is supplied. Where in the ordered list of images to start">Offset:</label>
-					<input type="number" id="offset" name="offset" value="0" title="Ignored unless limit is supplied. Where in the ordered list of images to start">
+				<div id="count-limit">
+					<div class="form-item">
+						<label for="limit" title="Only return this many images">Limit:</label>
+						<input type="number" id="limit" name="limit" minimum="0" title="Only return this many images" value="{{limit}}">
+					</div>
+					<div id="offset-group" class="form-item">
+						<label for="offset" title="Ignored unless limit is supplied. Where in the ordered list of images to start">Offset:</label>
+						<input type="number" id="offset" name="offset" value="{{offset}}" title="Ignored unless limit is supplied. Where in the ordered list of images to start">
+					</div>
+				</div>
+				<div id="time-limit">
+					<div class="form-item">
+						<label for="span" title="Only return images taken within this span of time of each other">Span:</label>
+						<input type="number" id="span" name="span" minimum="0" value="{{span}}">
+						<select id="span-type" name="span-type">
+							{% for period in ["minutes", "hours", "days"] %}
+							<option value="{{period}}"{% if period == span_type %} selected{% end %}>{{period}}</option>
+							{% end %}
+						</select>
+					</div>
 				</div>
 			</div>
-			{% end %}
+
 			<br>
 			<div><input type="submit" value="{{submit}}"</div>
 		</form>
@@ -193,54 +179,17 @@
 	<script type="text/javascript" src="/scripts.js"></script>
 	<script type="text/javascript">
 		const KNOWN_TAGS = {% raw json_encode(known_tags) %};
-        const CURRENT_TAGS = {% raw json_encode(existing_tags) %};
-
-		const PARAMETERS = new Map({% raw json_encode(parameters) %});
+		const FILTERS = new Map({% raw json_encode(filters) %});
 		const TYPES = {
-			"number": new Map(
-				[
-					["<", {"input": "number"}],
-					["≤", {"input": "number"}],
-					["=", {"input": "number"}],
-					["≥", {"input": "number"}],
-					[">", {"input": "number"}],
-					["≠", {"input": "number"}],
-					["is set", {"value": null}],
-					["isn't set", {"value": null}],
-				]
-			),
-			"text": new Map(
-				[
-					["is", {"input": "text"}],
-					["is not", {"input": "text"}],
-					["starts with", {"input": "text"}],
-					["doesn't start with", {"input": "text"}],
-					["ends with", {"input": "text"}],
-					["doesn't end with", {"input": "text"}],
-					["contains", {"input": "text"}],
-					["doesn't contain", {"input": "text"}],
-					["is set", {"value": null},],
-					["isn't set", {"value": null}],
-				]
-			),
-			"date": new Map(
-				[
-					["<", {"input": "date"}],
-					["≤", {"input": "date"}],
-					["=", {"input": "date"}],
-					["≥", {"input": "date"}],
-					[">", {"input": "date"}],
-					["≠", {"input": "date"}],
-					["is set", {"value": null}],
-					["isn't set", {"value": null}],
-				]
-			),
+			{% for key, values in types.items() %}
+			"{{key}}": new Map({% raw json_encode(values) %}),
+			{% end %}
 		};
 		let COUNT = 0;
 		let NEXT_INDEX = 1;
-		{% if order %}let COLUMNS = {{len(order)}};{% end %}
+		let COLUMNS = {{len(order)}};
 
-		function add_filter() {
+		function add_filter(parameter=undefined, comparison=undefined, value=undefined) {
 			COUNT += 1;
 			const index = NEXT_INDEX;
 			NEXT_INDEX += 1;
@@ -263,9 +212,12 @@
 			select.id = base + "-parameter";
 			select.setAttribute("name", select.id);
 
-			for ([name, info] of PARAMETERS) {
+			for ([name, info] of FILTERS) {
 				let option = document.createElement("option");
 				option.setAttribute("value", name);
+				if (parameter == name) {
+					option.setAttribute("selected", "")
+				}
 				option.appendChild(document.createTextNode(info["label"]));
 				select.appendChild(option);
 			}
@@ -283,7 +235,7 @@
 			div.appendChild(button);
 
 			document.getElementById("filters").appendChild(div);
-			filter_change(base);
+			filter_change(base, comparison, value);
 			set_join_visibility();
 		}
 
@@ -293,16 +245,19 @@
 			if ("filter" + (NEXT_INDEX - 1) == name) {
 				NEXT_INDEX -= 1;
 			}
-			set_join_visibility()
+			set_join_visibility();
 		}
 
-		function filter_change(base) {
+		function filter_change(base, previous_comparison=undefined, previous_value=undefined) {
 			let select_value = document.getElementById(base + "-parameter").value;
-			let parameter = PARAMETERS.get(select_value);
+			let parameter = FILTERS.get(select_value);
 			let type = parameter["type"];
 
 			comparison = document.getElementById(base + "-comparison");
 			if (comparison) {
+				if (comparison.tagName == "SELECT"){
+					previous_comparison = comparison.value;
+				}
 				comparison.remove();
 			}
 
@@ -337,39 +292,13 @@
 				for (value of parameter["options"]) {
 					option = document.createElement("option");
 					option.setAttribute("value", value);
+					if (previous_value == value) {
+						option.setAttribute("selected", "");
+					}
 					option.appendChild(document.createTextNode(value));
 					select.appendChild(option);
 				}
 				settings.appendChild(select);
-			} else if (type == "list") {
-				label = document.getElementById(base + "-comparison-label")
-				if (label) {
-					label.remove();
-				}
-
-				value = document.getElementById(base + "-value")
-				if (value) {
-					value.remove();
-				}
-
-				comparison = document.createElement("input");
-				comparison.setAttribute("class", "filter-component");
-				comparison.hidden = true;
-				comparison.id = base + "-comparison"
-				comparison.setAttribute("name", comparison.id);
-				comparison.setAttribute("value", "list");
-				settings = document.getElementById(base + "-settings");
-				settings.appendChild(comparison)
-				label = document.createElement("label")
-				label.id = base + "-comparison-label"
-				label.appendChild(document.createTextNode("in"))
-				settings.appendChild(label)
-				textarea = document.createElement("textarea")
-				textarea.id = base + "-value"
-				label.setAttribute("for", textarea.id)
-				textarea.setAttribute("name", textarea.id);
-				textarea.setAttribute("placeholder", "1 per line")
-				settings.appendChild(textarea)
 			} else {
 				select = document.createElement("select");
 				select.setAttribute("class", "filter-component");
@@ -379,6 +308,11 @@
 					option = document.createElement("option");
 					option.setAttribute("value", value);
 					option.appendChild(document.createTextNode(value));
+
+					if (previous_comparison && value == previous_comparison) {
+						option.setAttribute("selected", "");
+					}
+
 					select.appendChild(option);
 				}
 				select.setAttribute(
@@ -387,21 +321,24 @@
 				)
 				document.getElementById(base + "-settings").appendChild(select);
 
-				filter_comparison_change(base, type);
+				filter_comparison_change(base, type, previous_value);
 			}
 		}
 
-		function filter_comparison_change(base, type) {
+		function filter_comparison_change(base, type, previous_value=undefined) {
 			let select_value = document.getElementById(base + "-comparison").value;
 			let info = TYPES[type].get(select_value);
+			let previous_type = null;
 
-			label = document.getElementById(base + "-comparison-label")
+			label = document.getElementById(base + "-comparison-label");
 			if (label) {
 				label.remove();
 			}
 
-			value = document.getElementById(base + "-value")
+			value = document.getElementById(base + "-value");
 			if (value) {
+				previous_type = value.type;
+				previous_value = value.value;
 				value.remove();
 			}
 
@@ -414,6 +351,12 @@
 			} else {
 				input.setAttribute("type", info["input"]);
 				input.required = true;
+				if (
+					previous_type == info["input"]
+					|| (previous_type == undefined && previous_value != undefined)
+				) {
+					input.setAttribute("value", previous_value);
+				}
 			}
 
 			document.getElementById(base + "-settings").appendChild(input)
@@ -422,9 +365,6 @@
 		function set_join_visibility() {
 			if (COUNT > 1) {
 				document.getElementById("join").hidden = false;
-				{% if False %}document.getElementById("join-pattern-div").hidden = (
-					document.getElementById("join-strategy").value != "pattern"
-				);{% end %}
 			} else {
 				document.getElementById("join").hidden = true;
 			}
@@ -453,20 +393,180 @@
 			check_ordering();
 		}
 
+		function display_limit() {
+			for (option of document.getElementById("limit-type").children) {
+				document.getElementById(option.value + "-limit").hidden = !option.selected;
+			}
+		}
+
+		function submit_search() {
+			if (select_all()) {
+				url = "./search?";
+
+				num_filters = 0;
+				for (child of document.getElementById("filters").children) {
+					if (child.classList.contains("filter-item")) {
+						num_filters += 1;
+
+						parameter = undefined;
+						for (option of document.getElementById(child.id + "-parameter")) {
+							if (option.selected || parameter == undefined) {
+								parameter = option.value;
+							}
+						}
+
+						comparison = undefined;
+						comparison_tag = document.getElementById(child.id + "-comparison");
+						if (comparison_tag.tagName == "SELECT") {
+							for (option of comparison_tag) {
+								if (option.selected || comparison == undefined) {
+									comparison = option.value;
+								}
+							}
+						}
+
+						value = undefined;
+						value_tag = document.getElementById(child.id + "-value");
+						if (value_tag.tagName == "SELECT") {
+							for (option of value_tag) {
+								if (option.selected || value == undefined) {
+									value = option.value;
+								}
+							}
+						} else {
+							value = value_tag.value
+						}
+
+						url += "filter-parameter-" + num_filters + "=" + encodeURIComponent(parameter) + "&";
+
+						if (comparison) {
+							url += "filter-comparison-" + num_filters + "=" + encodeURIComponent(comparison) + "&";
+						}
+
+						url += "filter-value-" + num_filters + "=" + encodeURIComponent(value) + "&";
+					}
+				}
+
+				if ((num_filters) > 0) {
+					strategy = "all";
+					for (child of document.getElementById("join-strategy").children) {
+						if (child.selected) {
+							strategy = child.value;
+						}
+					}
+
+					url += "filters=" + num_filters + "&filter-strategy=" + strategy + "&";
+				}
+
+				for (child of document.getElementById("reachable").children) {
+					if (child.selected && child.value) {
+						url += "reachable=" + child.value + "&";
+					}
+				}
+
+				for (child of document.getElementById("tagged").children) {
+					if (child.selected && child.value) {
+						url += "tagged=" + child.value + "&";
+					}
+				}
+
+				for (child of document.getElementById("any_tags")) {
+					url += "any=" + encodeURIComponent(child.value) + "&";
+				}
+
+				for (child of document.getElementById("all_tags")) {
+					url += "all=" + encodeURIComponent(child.value) + "&";
+				}
+
+				for (child of document.getElementById("no_tags")) {
+					url += "no=" + encodeURIComponent(child.value) + "&";
+				}
+
+				for (child of document.getElementById("no_tags")) {
+					url += "no=" + encodeURIComponent(child.value) + "&";
+				}
+
+				for (select of document.getElementsByClassName("order-property")) {
+					for (child of select.children) {
+						if (child.selected) {
+							url += "order-property=" + encodeURIComponent(child.value) + "&";
+						}
+					}
+				}
+
+				for (select of document.getElementsByClassName("order-direction")) {
+					for (child of select.children) {
+						if (child.selected) {
+							url += "order-direction=" + encodeURIComponent(child.value) + "&";
+						}
+					}
+				}
+
+				for (select of document.getElementsByClassName("order-nulls")) {
+					for (child of select.children) {
+						if (child.selected) {
+							url += "order-nulls=" + encodeURIComponent(child.value) + "&";
+						}
+					}
+				}
+
+				for (child of document.getElementById("limit-type").children) {
+					if (child.selected) {
+						limit_type = child.value;
+					}
+				}
+
+				url += "limit-type=" + limit_type + "&";
+
+				if (limit_type == "count") {
+					limit = document.getElementById("limit");
+					if (limit.value != "") {
+						url += "limit=" + limit.value + "&";
+					}
+
+					offset = document.getElementById("offset");
+					if (offset.value != "") {
+						url += "offset=" + offset.value + "&";
+					}
+				} else {
+					span = document.getElementById("span");
+					if (span.value != "") {
+						url += "span=" + span.value + "&";
+					}
+
+					for (child of document.getElementById("span-type").children) {
+						if (child.selected) {
+							url += "span-type=" + child.value + "&";
+						}
+					}
+				}
+
+				history.pushState({}, "", url);
+
+				return true;
+			} else {
+				return false;
+			}
+		}
+
 		function setup_js() {
+			{% for parameter, comparison, value in existing_filters %}
+			add_filter("{% raw parameter %}", "{% raw comparison %}", "{% raw value %}");
+			{% end %}
+
 			document.getElementById("add-filter").hidden = false;
 			set_join_visibility();
+
+			create_tag_form("item-any_tags", "any_tags", "known-tags", {% raw any_tags %});
+			create_tag_form("item-all_tags", "all_tags", "known-tags", {% raw all_tags %});
+			create_tag_form("item-no_tags", "no_tags", "known-tags", {% raw no_tags %});
+
 			set_ordering();
 
-			{% if existing_tags is not None %}
-			known_id = create_tag_list("form", KNOWN_TAGS);
+            document.getElementById("limit-type").setAttribute("onchange", "display_limit()");
+            display_limit();
 
-			for ([name, tags] of Object.entries(CURRENT_TAGS)) {
-                create_tag_form("item-" + name, name, known_id, tags);
-            }
-
-			document.getElementById("form").setAttribute("onsubmit", "return select_all()");
-			{% end %}
+			document.getElementById("form").setAttribute("onsubmit", "return submit_search()");
 		}
 
 		window.addEventListener("DOMContentLoaded", setup_js);

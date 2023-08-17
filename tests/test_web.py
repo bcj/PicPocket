@@ -1046,8 +1046,11 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             "all_tags-list",
             "no_tags-list",
             "reachable",
+            "limit-type",
             "limit",
             "offset",
+            "span",
+            "span-type",
         }
         for index in range(5):
             for part in ("parameter", "comparison", "value"):
@@ -1090,7 +1093,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             "options": ["", "No", "Yes"],
         }
         assert inputs["limit"] == {"type": "number", "value": None}
-        assert inputs["offset"] == {"type": "number", "value": 0}
+        assert inputs["offset"] == {"type": "number", "value": None}
         for index in range(5):
             input = inputs[f"filter{index + 1}-parameter"]
             assert input["type"] == "select"
@@ -1177,6 +1180,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
                 "filter2-parameter": "extension",
                 "filter2-comparison": "is",
                 "filter2-value": ".XYZ",
+                "limit-type": "count",
                 "limit": 2,
                 "order1-property": "caption",
                 "order1-direction": "ascending",
@@ -1206,6 +1210,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
                 "filter2-parameter": "extension",
                 "filter2-comparison": "is",
                 "filter2-value": ".XYZ",
+                "limit-type": "count",
                 "limit": 2,
                 "order1-property": "caption",
                 "order1-direction": "ascending",
