@@ -51,12 +51,12 @@
 
                     {% if image.creation_date %}
                     <dt>Creation Date:</dt>
-                    <dd>{{image.creation_date.strftime("%Y-%m-%d %H:%M:%S")}}</dd>
+                    <dd>{{image.creation_date.astimezone().strftime("%Y-%m-%d %H:%M:%S")}}</dd>
                     {% end %}
 
                     {% if image.last_modified %}
                     <dt>Last-Modified Date:</dt>
-                    <dd>{{image.last_modified.strftime("%Y-%m-%d %H:%M:%S")}}</dd>
+                    <dd>{{image.last_modified.astimezone().strftime("%Y-%m-%d %H:%M:%S")}}</dd>
                     {% end %}
 
                     {% if image.rating is not None %}
