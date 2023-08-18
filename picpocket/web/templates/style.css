@@ -193,3 +193,7 @@ input:invalid:required ~ .go-action {
 p {
     max-width: 1000px;
 }
+
+.tag-list {
+    list-style-type: none;
+}

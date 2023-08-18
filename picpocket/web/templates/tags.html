@@ -10,8 +10,28 @@
     {% module NavBar() %}
 
     <main>
+        <h1>Tags</h1>
+
+        <p>
+            Labels applied to images in PicPocket that can be used to categorize and sort images.
+            Tags in PicPocket are hierarchical: 'animals/birds' is a subcategory of 'animals', and 'animals/birds/duck' is a subcategoriy of both.
+        </p>
+
+        <p>
+            When searching for images based on tags, any more-specific tags will be included as well (i.e., an image tagged 'animal/bird/duck/mallard' will also show up if you search for 'animal/bird' or 'animal').
+        </p>
+
+        <p>
+            You can create tags here, but you don't need to! If you add a new tag to an image, it will be created automatically.
+        </p>
+
+        <div id="endpoints">
+            <a class="action-link" href="{{reverse_url('tags-add')}}">Add</a>
+        </div>
+
+        <h2>Existing Tags</h2>
+
         <article>
-            <h1>Tags</h1>
             {% if tags %}
             {% module DisplayTags(tags) %}
             {% end %}

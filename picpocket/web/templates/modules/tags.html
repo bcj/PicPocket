@@ -1,4 +1,4 @@
-<ul>
+<ul class="tag-list">
 {% for tag, info in sorted(tags.items()) %}
 {% if parent %}{% set full_name = f"{parent}/{tag}" %}{% else %}{% set full_name = tag %}{% end %}
 <li>

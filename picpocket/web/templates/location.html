@@ -10,8 +10,20 @@
     {% module NavBar() %}
 
     <main>
-        {% if len(locations) != 1 %}
+        {% if not single %}
         <h1>Locations</h1>
+
+        <p>
+            Sources you can import images from (e.g., your camera),
+            and destinations you store images at (e.g., your <em>Pictures</em> directory).
+        </p>
+
+        <div id="endpoints">
+            <a class="action-link" href="{{reverse_url('locations-add')}}">Add</a>
+        </div>
+
+        <h2>Existing Locations</h2>
+
         {% end %}
 
         <article>

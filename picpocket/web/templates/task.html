@@ -10,8 +10,19 @@
     {% module NavBar() %}
 
     <main>
-        {% if len(tasks) != 1 %}
+        {% if not single %}
         <h1>Tasks</h1>
+
+        <p>
+            Preconfigured jobs for importing images from your devices to the places you store them.
+            Tasks can automatically apply information to the images they copy.
+        </p>
+
+        <div id="endpoints">
+            <a class="action-link" href="{{reverse_url('tasks-add')}}">Add</a>
+        </div>
+
+        <h2>Existing Tasks</h2>
         {% end %}
 
         <article>

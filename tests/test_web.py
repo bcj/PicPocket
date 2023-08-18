@@ -17,22 +17,26 @@ def parse_endpoints(contents: str) -> dict[str, str]:
     name = None
     parent = BeautifulSoup(contents, "html.parser").find(id="endpoints")
     if parent:
-        for child in parent.children:
-            if isinstance(child, str):
-                continue
+        if parent.name == "dl":
+            for child in parent.children:
+                if isinstance(child, str):
+                    continue
 
-            if name is None:
-                assert child.name == "dt"
-                link = child.contents[0]
-                assert link.name == "a"
-                path = link["href"]
-                assert link.text
-                name = link.text
-                endpoints[name] = path
-            else:
-                name = None
-                assert child.name == "dd"
-                assert child.text
+                if name is None:
+                    assert child.name == "dt"
+                    link = child.contents[0]
+                    assert link.name == "a"
+                    path = link["href"]
+                    assert link.text
+                    name = link.text
+                    endpoints[name] = path
+                else:
+                    name = None
+                    assert child.name == "dd"
+                    assert child.text
+        else:
+            for link in parent.find_all(name="a"):
+                endpoints[link.text.lower()] = link["href"]
 
     assert name is None
 
@@ -396,17 +400,16 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
 
         response = requests.get(base)
         assert response.status_code == 200
-        endpoints = parse_endpoints(response.text)
+        root_endpoints = parse_endpoints(response.text)
 
-        assert "locations" in endpoints
-        response = requests.get(f"{base}{endpoints['locations']}")
+        assert "locations" in root_endpoints
+        response = requests.get(f"{base}{root_endpoints['locations']}")
         assert response.status_code == 200
 
         endpoints = parse_endpoints(response.text)
-        assert endpoints.keys() == {"add", "list"}
+        assert endpoints.keys() == {"add"}
 
-        actions = parse_actions(response.text)
-        assert actions.keys() == {"get", "mount", "unmount", "import", "edit", "remove"}
+        api_base = f"{base}{root_endpoints['locations']}".rsplit("/", 1)[0]
 
         # add
         main = tmp_path / "main"
@@ -466,14 +469,14 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
         }
         minimal_info = locations[0]
 
-        response = requests.get(f"{base}{endpoints['list']}")
+        response = requests.get(f"{base}{root_endpoints['locations']}")
         assert response.status_code == 200
         locations = parse_locations(response.text)
 
         assert locations in ([main_info, minimal_info], [minimal_info, main_info])
 
         # edit
-        response = requests.get(f"{base}{actions['edit'].format(id=main_id)}")
+        response = requests.get(f"{api_base}/location/{main_id}/edit")
         response.status_code == "200"
 
         inputs = parse_form(response.text)
@@ -492,7 +495,7 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
 
         # we need to pass all values. form preloads current values
         response = requests.post(
-            f"{base}{actions['edit'].format(id=main_id)}",
+            f"{api_base}/location/{main_id}/edit",
             data={
                 "new_name": "pictures",
                 "description": "my pictures",
@@ -502,7 +505,7 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
             },
         )
         assert response.status_code == 200
-        assert response.url == f"{base}{actions['get'].format(id=main_id)}"
+        assert response.url == f"{api_base}/location/{main_id}"
         locations = parse_locations(response.text)
         assert len(locations) == 1
         assert locations[0] == {
@@ -520,11 +523,11 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
         main2 = tmp_path / "main2"
         main2.mkdir()
         response = requests.post(
-            f"{base}{actions['mount'].format(id=main_id)}",
+            f"{api_base}/location/{main_id}/mount",
             data={"path": str(main2)},
         )
         assert response.status_code == 200
-        assert response.url == f"{base}{actions['get'].format(id=main_id)}"
+        assert response.url == f"{api_base}/location/{main_id}"
         locations = parse_locations(response.text)
         assert len(locations) == 1
         assert locations[0] == {
@@ -538,31 +541,31 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
             "removable": True,
         }
         new_main = locations[0]
-        response = requests.get(f"{base}{actions['get'].format(id=main_id)}")
+        response = requests.get(f"{api_base}/location/{main_id}")
         assert response.status_code == 200
         locations = parse_locations(response.text)
         assert len(locations) == 1
         assert locations[0] == new_main
 
         # unmount
-        response = requests.post(f"{base}{actions['unmount'].format(id=main_id)}")
+        response = requests.post(f"{api_base}/location/{main_id}/unmount")
         assert response.status_code == 200
-        assert response.url == f"{base}{actions['get'].format(id=main_id)}"
+        assert response.url == f"{api_base}/location/{main_id}"
         locations = parse_locations(response.text)
         assert len(locations) == 1
         assert locations[0] == main_info
         new_main = locations[0]
-        response = requests.get(f"{base}{actions['get'].format(id=main_id)}")
+        response = requests.get(f"{api_base}/location/{main_id}")
         assert response.status_code == 200
         locations = parse_locations(response.text)
         assert len(locations) == 1
         assert locations[0] == main_info
 
         # remove
-        response = requests.post(f"{base}{actions['remove'].format(id=minimal_id)}")
+        response = requests.post(f"{api_base}/location/{minimal_id}/remove")
         assert response.status_code == 200
 
-        response = requests.get(f"{base}{actions['get'].format(id=minimal_id)}")
+        response = requests.get(f"{api_base}/location/{minimal_id}")
         assert response.status_code == 404
 
         # import
@@ -570,7 +573,7 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
             shutil.copy2(path, main)
 
         response = requests.post(
-            f"{base}{actions['import'].format(id=main_id)}",
+            f"{api_base}/location/{main_id}/import",
             {
                 "batch_size": 100,
                 "file_formats": "",
@@ -599,6 +602,8 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         response = requests.get(f"{base}{root_endpoints['images']}")
         assert response.status_code == 200
 
+        api_base = f"{base}{root_endpoints['images']}".rsplit("/", 1)[0]
+
         endpoints = parse_endpoints(response.text)
         assert endpoints.keys() == {"search", "find", "upload", "verify"}
 
@@ -615,7 +620,6 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         response = requests.get(f"{base}{root_endpoints['locations']}")
         assert response.status_code == 200
         location_endpoints = parse_endpoints(response.text)
-        location_actions = parse_actions(response.text)
 
         response = requests.post(
             f"{base}{location_endpoints['add']}",
@@ -645,7 +649,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             shutil.copy2(path, main)
 
         response = requests.post(
-            f"{base}{location_actions['import'].format(id=main_id)}",
+            f"{api_base}/location/{main_id}/import",
             {
                 "batch_size": 100,
                 "file_formats": "",
@@ -906,7 +910,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
 
         # reimport files so we can test verify
         response = requests.post(
-            f"{base}{location_actions['import'].format(id=main_id)}",
+            f"{api_base}/location/{main_id}/import",
             {
                 "batch_size": 100,
                 "file_formats": "",
@@ -1288,10 +1292,8 @@ async def test_tags(run_web, tmp_path, image_files):
         response = requests.get(f"{base}{root_endpoints['tags']}")
         assert response.status_code == 200
         endpoints = parse_endpoints(response.text)
-        actions = parse_actions(response.text)
 
-        assert endpoints.keys() == {"add", "list"}
-        assert actions == {}
+        assert endpoints.keys() == {"add"}
 
         children = {
             "a": {"b"},
@@ -1390,7 +1392,7 @@ async def test_tags(run_web, tmp_path, image_files):
         images = parse_all_images(response.text, base)
         assert images.keys() == set()
 
-        response = requests.get(f"{base}{endpoints['list']}")
+        response = requests.get(f"{base}{root_endpoints['tags']}")
         assert response.status_code == 200
         tags = {}
         list_tag = BeautifulSoup(response.text, "html.parser").find("ul")
@@ -1576,10 +1578,8 @@ async def test_tasks(run_web, tmp_path, image_files):
         response = requests.get(f"{base}{root_endpoints['tasks']}")
         assert response.status_code == 200
         endpoints = parse_endpoints(response.text)
-        actions = parse_actions(response.text)
 
-        assert endpoints.keys() == {"add", "list"}
-        assert actions.keys() == {"run", "get", "edit", "remove"}
+        assert endpoints.keys() == {"add"}
 
         response = requests.get(f"{base}{endpoints['add']}")
         assert response.status_code == 200
@@ -1679,12 +1679,13 @@ async def test_tasks(run_web, tmp_path, image_files):
             "destination": "a/b/{file}",
         }
 
-        response = requests.get(f"{base}{endpoints['list']}")
+        response = requests.get(f"{base}{root_endpoints['tasks']}")
         assert response.status_code == 200
         tasks = parse_tasks(response.text)
         assert tasks in ([minimal_task, real_task], [real_task, minimal_task])
 
-        response = requests.get(f"{base}{actions['edit'].format(name='minimal')}")
+        api_base = f"{base}{root_endpoints['tasks']}".rsplit("/", 1)[0]
+        response = requests.get(f"{api_base}/task/minimal/edit")
         assert response.status_code == 200
         inputs = parse_form(response.text)
         assert inputs.keys() == {
@@ -1714,7 +1715,7 @@ async def test_tasks(run_web, tmp_path, image_files):
         assert inputs["destination_format"] == {"type": "text", "value": None}
         assert inputs["file_formats"] == {"type": "textarea", "value": None}
 
-        response = requests.get(f"{base}{actions['edit'].format(name='real-task')}")
+        response = requests.get(f"{api_base}/task/real-task/edit")
         assert response.status_code == 200
         inputs = parse_form(response.text)
         assert inputs.keys() == {
@@ -1751,7 +1752,7 @@ async def test_tasks(run_web, tmp_path, image_files):
         assert inputs["file_formats"] == {"type": "textarea", "value": ".JPG"}
 
         response = requests.post(
-            f"{base}{actions['edit'].format(name='minimal')}",
+            f"{api_base}/task/minimal/edit",
             {
                 "source": "camera",
                 "destination": "main",
@@ -1776,7 +1777,7 @@ async def test_tasks(run_web, tmp_path, image_files):
         }
 
         response = requests.post(
-            f"{base}{actions['edit'].format(name='real-task')}",
+            f"{api_base}/task/real-task/edit",
             {
                 "source": "camera",
                 "destination": "main",
@@ -1807,19 +1808,19 @@ async def test_tasks(run_web, tmp_path, image_files):
             "destination": "a/{file}",
         }
 
-        response = requests.get(f"{base}{actions['remove'].format(name='minimal')}")
+        response = requests.get(f"{api_base}/task/minimal/remove")
         assert response.status_code == 200
         inputs = parse_form(response.text)
         assert inputs == {}
 
-        response = requests.post(f"{base}{actions['remove'].format(name='minimal')}")
+        response = requests.post(f"{api_base}/task/minimal/remove")
         assert response.status_code == 200
 
-        response = requests.get(f"{base}{actions['get'].format(name='minimal')}")
+        response = requests.get(f"{api_base}/task/minimal/get")
         assert response.status_code == 404
 
         # run
-        response = requests.get(f"{base}{actions['run'].format(name='real-task')}")
+        response = requests.get(f"{api_base}/task/real-task/run")
         assert response.status_code == 200
         inputs = parse_form(response.text)
         assert inputs == {
@@ -1850,7 +1851,7 @@ async def test_tasks(run_web, tmp_path, image_files):
         shutil.copy2(image_files[0], b / "b.jpg")
 
         response = requests.post(
-            f"{base}{actions['run'].format(name='real-task')}",
+            f"{api_base}/task/real-task/run",
             {"since": "2020-02-01T00:00"},
         )
         assert response.status_code == 200
@@ -1867,7 +1868,7 @@ async def test_tasks(run_web, tmp_path, image_files):
             "b.jpeg",
         }
 
-        response = requests.post(f"{base}{actions['run'].format(name='real-task')}")
+        response = requests.post(f"{api_base}/task/real-task/run")
         assert response.status_code == 200
         images = parse_all_images(response.text, base)
         assert len(images) == 0
@@ -1879,7 +1880,7 @@ async def test_tasks(run_web, tmp_path, image_files):
         assert (main / "a" / "b.jpeg").is_file()
 
         response = requests.post(
-            f"{base}{actions['run'].format(name='real-task')}",
+            f"{api_base}/task/real-task/run",
             {"full": "on"},
         )
         assert response.status_code == 200

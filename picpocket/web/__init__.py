@@ -388,17 +388,10 @@ class ApiRootHandler(BaseHandler):
         )
 
 
-class LocationsHandler(BaseHandler):
-    def get(self):
-        self.render_web(
-            "index.html",
-            title="Locations",
-            description="Places to store images & places to import images from",
-            endpoints=ENDPOINTS["locations"],
-            actions=ACTIONS["locations"],
-            id_name="{id}",
-            id_type="text",
-        )
+class LocationsHandler(BaseApiHandler):
+    async def get(self):
+        locations = await self.api.list_locations()
+        self.render_web("location.html", locations=locations, single=False)
 
 
 class LocationsAddHandler(BaseApiHandler):
@@ -432,12 +425,6 @@ class LocationsAddHandler(BaseApiHandler):
         self.redirect(self.reverse_url("locations-get", name_or_id))
 
 
-class LocationsListHandler(BaseApiHandler):
-    async def get(self):
-        locations = await self.api.list_locations()
-        self.render_web("location.html", locations=locations)
-
-
 class LocationsGetHandler(BaseApiHandler):
     async def get(self, name_or_id):
         name_or_id = int_or_str(name_or_id)
@@ -455,6 +442,7 @@ class LocationsGetHandler(BaseApiHandler):
             mount_path=ACTIONS["locations"]["mount"].path,
             unmount_path=ACTIONS["locations"]["unmount"].path,
             import_path=ACTIONS["locations"]["import"].path,
+            single=True,
         )
 
 
@@ -1474,27 +1462,9 @@ class ImagesRemoveHandler(BaseApiHandler):
         self.redirect(url)
 
 
-class TagsHandler(BaseHandler):
-    def get(self):
-        self.render_web(
-            "index.html",
-            title="Tags",
-            description=(
-                "Labels applied to images in PicPocket that can be used to "
-                "categorize and sort images. Tags in PicPocket are hierarchical: "
-                "'plants/flowers' is a subcategory of 'plants', and "
-                "'plants/flowers/Hyacinth' is a subcategory of both of them. "
-                "When searching for images based on tags, any more-specific "
-                "tags will be included as well. When tagging images, you do "
-                "not need to include any broader-category tags (i.e., if "
-                "you tag an image 'plants/flowers/Hyacinth', it is unnecessary "
-                "to tag it 'plants' or 'plants/flowers')."
-            ),
-            endpoints=ENDPOINTS["tags"],
-            actions=None,
-            id_name="{tag}",
-            id_type="text",
-        )
+class TagsHandler(BaseApiHandler):
+    async def get(self):
+        self.render_web("tags.html", tags=await self.api.all_tags())
 
 
 class TagsAddHandler(BaseApiHandler):
@@ -1511,11 +1481,6 @@ class TagsAddHandler(BaseApiHandler):
             raise HTTPError(400, f"Moving tag failed: {name}")
 
         self.redirect(f"{self.reverse_url('tags-get')}?name={url_escape(name)}")
-
-
-class TagsListHandler(BaseApiHandler):
-    async def get(self):
-        self.render_web("tags.html", tags=await self.api.all_tags())
 
 
 class TagsGetHandler(BaseApiHandler):
@@ -1634,21 +1599,25 @@ class TagsImagesHandler(BaseApiHandler):
         await self.display_images(ids, "Tagged", suggestions=bool(self.suggestions))
 
 
-class TasksHandler(BaseHandler):
-    def get(self):
+class TasksHandler(BaseApiHandler):
+    async def get(self):
+        tasks = await self.api.list_tasks()
+        location_names = {}
+
+        for task in tasks:
+            for location_id in (task.source, task.destination):
+                if location_id not in location_names:
+                    location = await self.api.get_location(location_id)
+                    if location:
+                        location_names[location_id] = location.name
+                    else:
+                        location_names[location_id] = location.name
+
         self.render_web(
-            "index.html",
-            title="Tasks",
-            description=(
-                "preconfigured jobs for importing images from your "
-                "devices to the places you store them. "
-                "Tasks can automatically apply information to the images "
-                "they copy."
-            ),
-            endpoints=ENDPOINTS["tasks"],
-            actions=ACTIONS["tasks"],
-            id_name="{name}",
-            id_type="text",
+            "task.html",
+            tasks=tasks,
+            location_names=location_names,
+            single=False,
         )
 
 
@@ -1702,23 +1671,6 @@ class TasksAddHandler(BaseApiHandler):
             raise HTTPError(400, "Creating task failed")
 
         self.redirect(self.reverse_url("tasks-get", data["name"]))
-
-
-class TasksListHandler(BaseApiHandler):
-    async def get(self):
-        tasks = await self.api.list_tasks()
-        location_names = {}
-
-        for task in tasks:
-            for location_id in (task.source, task.destination):
-                if location_id not in location_names:
-                    location = await self.api.get_location(location_id)
-                    if location:
-                        location_names[location_id] = location.name
-                    else:
-                        location_names[location_id] = location.name
-
-        self.render_web("task.html", tasks=tasks, location_names=location_names)
 
 
 class TasksRunHandler(BaseApiHandler):
@@ -1780,7 +1732,12 @@ class TasksGetHandler(BaseApiHandler):
                 else:
                     location_names[location_id] = location.name
 
-        self.render_web("task.html", tasks=[task], location_names=location_names)
+        self.render_web(
+            "task.html",
+            tasks=[task],
+            location_names=location_names,
+            single=True,
+        )
 
 
 class TasksEditHandler(BaseApiHandler):
@@ -2002,7 +1959,6 @@ NAVBAR = {
             "Sources you can import images from (e.g., your camera), "
             "and destinations you store images (e.g., your Pictures directory)."
         ),
-        handler=LocationsHandler,
     ),
     "images": Endpoint(
         f"{URL_BASE}/images",
@@ -2021,7 +1977,6 @@ NAVBAR = {
             "Add/update tag descriptions, or move tags to keep them better "
             "organized."
         ),
-        handler=TagsHandler,
     ),
     "tasks": Endpoint(
         f"{URL_BASE}/tasks",
@@ -2032,7 +1987,6 @@ NAVBAR = {
             "Tasks can automatically apply information to the images "
             "they copy."
         ),
-        handler=TasksHandler,
     ),
 }
 
@@ -2049,11 +2003,11 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
             handler=LocationsAddHandler,
             submit="Create",
         ),
-        "list": Endpoint(
-            f"{NAVBAR['locations'].path}/list",
+        "": Endpoint(
+            f"{NAVBAR['locations'].path}",
             "List Locatoins",
             "See the locations PicPocket knows about.",
-            handler=LocationsListHandler,
+            handler=LocationsHandler,
         ),
     },
     "images": {
@@ -2110,11 +2064,11 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
             ],
         ),
-        "list": Endpoint(
-            f"{NAVBAR['tags'].path}/list",
+        "": Endpoint(
+            f"{NAVBAR['tags'].path}",
             "Tags",
             "Get the list of all tags in PicPocket.",
-            handler=TagsListHandler,
+            handler=TagsHandler,
         ),
     },
     "tasks": {
@@ -2192,11 +2146,11 @@ ENDPOINTS: dict[str, dict[str, Endpoint]] = {
                 },
             ],
         ),
-        "list": Endpoint(
-            f"{NAVBAR['tasks'].path}/list",
+        "": Endpoint(
+            f"{NAVBAR['tasks'].path}",
             "List Tasks",
             "List all tasks.",
-            handler=TasksListHandler,
+            handler=TasksHandler,
         ),
     },
 }
@@ -2671,7 +2625,7 @@ def make_app(
                                 "local_actions": special_actions,
                                 "suggestions": suggestions,
                             },
-                            name=f"{group}-{name}",
+                            name=f"{group}-{name}" if name else group,
                         )
                     )
 
