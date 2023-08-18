@@ -15,6 +15,7 @@
 
         <div class="contents">
             <form id="form" class="box main-form" method="post" enctype="multipart/form-data">
+                <img id="image-preview" src="#" style="max-width: 100%;" hidden>
                 <div class="form-item" id="item-file">
                     <label for="file">Choose File: </label>
                     <input id="file" name="file" title="The image to add" type="file" required>
@@ -89,6 +90,19 @@
         }
         {% end %}
 
+        function preview_image() {
+            preview = document.getElementById("image-preview");
+
+            file_input = document.getElementById("file");
+            if (file_input.files.length > 0) {
+                file = file_input.files[0];
+                preview.src = URL.createObjectURL(file);
+                preview.hidden = false;
+            } else {
+                preview.hidden = true;
+            }
+        }
+
         function setup_js() {
             create_tag_form("item-tags", "tags", "known-tags", []);
             document.getElementById("form").setAttribute("onsubmit", "return select_all('tags')");
@@ -103,6 +117,9 @@
 
             div.appendChild(button);
             {% end %}
+
+            file = document.getElementById("file");
+            file.setAttribute("onchange", "preview_image()");
         }
 
         window.addEventListener("DOMContentLoaded", setup_js);
