@@ -23,12 +23,12 @@
 
                 <div class="form-item" id="item-description">
                     <label for="description">Description:</label>
-                    <textarea id="description" name="description" title="A brief explanation of what the location is.">{{existing.get('description', '')}}</textarea>
+                    <textarea id="description" name="description" title="A brief explanation of what the location is.">{{existing.get('description') or ''}}</textarea>
                 </div>
 
                 <div class="form-item" id="item-path">
                     <label for="path">Path:</label>
-                    <input id="path" name="path" type="text" title="Where the location is on your computer. This should be left blank if the location isn't mounted in a consistent location, or if multiple devices share this path. This must be supplied if the location isn't removable." value="{{existing.get('path', '')}}">
+                    <input id="path" name="path" type="text" title="Where the location is on your computer. This should be left blank if the location isn't mounted in a consistent location, or if multiple devices share this path. This must be supplied if the location isn't removable." value="{{existing.get('path') or ''}}">
                 </div>
 
                 <div class="form-item" id="item-type">

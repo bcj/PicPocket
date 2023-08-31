@@ -1,0 +1,26 @@
+<div class="item">
+    <h2>{% if link_id %}<a href="{{reverse_url('locations-get', location.id)}}">{{location.name}}</a>{% else %}{{location.name}}{% end %}</h2>
+    <h4>{{"Source" if location.source else "Destination"}}{% if location.removable %}, Removable{% end %}</h4>
+    {% if location.description %}{% for line in location.description.splitlines() %}
+    <p>{{line}}</p>
+    {% end %}{% end %}
+    <div class="actions">
+        <a class="action-link" href="{{reverse_url('locations-mount', location.id)}}">Mount</a>
+        {% if location.mount_point %}<a class="action-link" href="{{reverse_url('locations-unmount', location.id)}}">Unmount</a>{% end %}
+        {% if location.destination %}<a class="action-link" href="{{reverse_url('locations-import', location.id)}}">Import</a>{% end %}
+        <a class="action-link" href="{{reverse_url('locations-edit', location.id)}}">Edit</a>
+        <a class="action-link" href="{{reverse_url('locations-remove', location.id)}}">Remove</a>
+        {% if "show-file" in local_actions and (location.path or location.mount_point) %}<a class="action-link special-action" onClick="call_special_action('{{reverse_url("show-file", location.id)}}?type=location', '{{local_actions["show-file"]}}')">Show in Finder</a>{% end %}
+    </div>
+    <dl>
+        {% if location.path %}
+        <dt>Path:</dt>
+        <dd>{{location.path}}</dd>
+        {% end %}
+
+        {% if location.mount_point %}
+        <dt>Mount Point:</dt>
+        <dd>{{location.mount_point}}</dd>
+        {% end %}
+    </dl>
+</div>

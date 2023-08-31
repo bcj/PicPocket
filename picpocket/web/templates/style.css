@@ -89,6 +89,31 @@ th {
     color: var(--accent-text-color);
 }
 
+.item-holder {
+    width: max-content;
+}
+
+.item {
+    background-color: var(--secondary-color);
+    border-radius: 1em;
+    margin: 0.5em;
+    padding: 1em;
+    text-align: left;
+    overflow: wrap;
+    width: max-content;
+}
+
+.item > h2, h4 {
+    text-align: center;
+    margin-top: 0em;
+    margin-bottom: 0.2em;
+}
+
+.item > .actions {
+    margin-top: 1em;
+    text-align: center;
+}
+
 .contents {
     background-color: var(--secondary-color);
     display: flex;

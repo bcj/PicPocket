@@ -4,68 +4,19 @@
     <meta charset="utf-8">
 
     <link rel="stylesheet" type="text/css" href="/style.css" >
-    <title>{{locations[0].name if len(locations) == 1 else "Locations"}}</title>
+    <title>{{location.name}}</title>
 </head>
 <body>
     {% module NavBar() %}
 
     <main>
-        {% if not single %}
-        <h1>Locations</h1>
-
-        <p>
-            Sources you can import images from (e.g., your camera),
-            and destinations you store images at (e.g., your <em>Pictures</em> directory).
-        </p>
-
-        <div id="endpoints">
-            <a class="action-link" href="{{reverse_url('locations-add')}}">Add</a>
-        </div>
-
-        <h2>Existing Locations</h2>
-
-        {% end %}
-
-        <article>
-            {% if not locations %}
-            <p>No locations found</p>
-            {% else %}
-            {% for location in locations %}
-            <div class="location-info">
-                <h2>{{location.name}}</h2>
-                {% if location.description %}<p>{{location.description}}</p>{% end %}
-                <div class="actions">
-                    <a class="action-link" href="{{reverse_url('locations-mount', location.id)}}">Mount</a>
-                    {% if location.mount_point %}<a class="action-link" href="{{reverse_url('locations-unmount', location.id)}}">Unmount</a>{% end %}
-                    {% if location.destination %}<a class="action-link" href="{{reverse_url('locations-import', location.id)}}">Import</a>{% end %}
-                    <a class="action-link" href="{{reverse_url('locations-edit', location.id)}}">Edit</a>
-                    <a class="action-link" href="{{reverse_url('locations-remove', location.id)}}">Remove</a>
-                </div>
-                <dl>
-                    <dt>Id:</dt>
-                    <dd>{{location.id}}</dd>
-
-                    {% if location.path %}
-                    <dt>Path:</dt>
-                    <dd>{{location.path}}</dd>
-                    {% end %}
-
-                    {% if location.mount_point %}
-                    <dt>Mount Point:</dt>
-                    <dd>{{location.mount_point}}</dd>
-                    {% end %}
-
-                    <dt>Type:</dt>
-                    <dd>{{"Source" if location.source else "Destination"}}</dd>
-
-                    <dt>Removable:</dt>
-                    <dd>{{"yes" if location.removable else "no"}}</dd>
-                </dl>
-            </div>
-            {% end %}
-            {% end %}
+        <article class="item-holder">
+            {% module DisplayLocation(location, local_actions) %}
         </article>
 
     </main>
+    {% if local_actions %}
+    <script type="text/javascript" src="/scripts.js"></script>
+    {% end %}
 </body>
 </html>

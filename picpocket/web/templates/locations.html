@@ -1,0 +1,55 @@
+{% whitespace all %}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>Locations</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>Locations</h1>
+
+        <p>
+            Sources you can import images from (e.g., your camera),
+            and destinations you store images at (e.g., your <em>Pictures</em> directory).
+        </p>
+
+        <div id="endpoints">
+            <a class="action-link" href="{{reverse_url('locations-add')}}">Add</a>
+        </div>
+
+        {% if sources %}
+        <h2>Sources</h2>
+
+        <article class="item-holder">
+            {% for location in sources %}
+            <div class="location-info">
+                {% module DisplayLocation(location, local_actions, link_id=True) %}
+            </div>
+            {% end %}
+        </article>
+        {% elif not destinations %}
+            <p>No locations</p>
+        {% end %}
+
+        {% if destinations %}
+        <h2>Destinations</h2>
+
+        <article class="item-holder">
+            {% for location in destinations %}
+            <div class="location-info">
+                {% module DisplayLocation(location, local_actions, link_id=True) %}
+            </div>
+            {% end %}
+        </article>
+        {% end %}
+
+    </main>
+    {% if local_actions %}
+    <script type="text/javascript" src="/scripts.js"></script>
+    {% end %}
+</body>
+</html>

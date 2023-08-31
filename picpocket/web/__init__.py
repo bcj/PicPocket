@@ -24,7 +24,7 @@ from tornado.web import Application, HTTPError, RequestHandler, UIModule
 
 from picpocket.api import PicPocket
 from picpocket.database import logic
-from picpocket.database.types import Image
+from picpocket.database.types import Location, Image
 from picpocket.images import mime_type
 from picpocket.parsing import full_path, int_or_str
 from picpocket.version import WEB_VERSION
@@ -390,8 +390,21 @@ class ApiRootHandler(BaseHandler):
 
 class LocationsHandler(BaseApiHandler):
     async def get(self):
-        locations = await self.api.list_locations()
-        self.render_web("location.html", locations=locations, single=False)
+        sources = []
+        destinations = []
+        for location in await self.api.list_locations():
+            if location.source:
+                sources.append(location)
+
+            if location.destination:
+                destinations.append(location)
+
+        self.render_web(
+            "locations.html",
+            sources=sources,
+            destinations=destinations,
+            local_actions=self.local_actions,
+        )
 
 
 class LocationsAddHandler(BaseApiHandler):
@@ -436,13 +449,13 @@ class LocationsGetHandler(BaseApiHandler):
 
         self.render_web(
             "location.html",
-            locations=[location],
+            location=location,
             edit_path=ACTIONS["locations"]["edit"].path,
             remove_path=ACTIONS["locations"]["remove"].path,
             mount_path=ACTIONS["locations"]["mount"].path,
             unmount_path=ACTIONS["locations"]["unmount"].path,
             import_path=ACTIONS["locations"]["import"].path,
-            single=True,
+            local_actions=self.local_actions,
         )
 
 
@@ -1848,22 +1861,37 @@ class ShowInFinderHandler(RequestHandler):
 
     async def get(self, text_id: str):
         try:
-            image_id = int(text_id)
+            id = int(text_id)
         except Exception:
-            raise HTTPError(400, f"Invalid image id: {text_id}")
+            raise HTTPError(400, f"Invalid id: {text_id}")
 
-        image = await self.api.get_image(image_id)
+        id_type = self.get_query_argument("type", "image")
 
-        if image is None:
-            raise HTTPError(404, f"Unknown image: {image_id}")
+        if id_type == "image":
+            image = await self.api.get_image(id)
 
-        if not image.full_path:
-            raise HTTPError(400, "Image path not known")
+            if image is None:
+                raise HTTPError(404, f"Unknown image: {image_id}")
+
+            if not image.full_path:
+                raise HTTPError(400, "Image path not known")
+
+            path = image.full_path
+        elif id_type == "location":
+            location = await self.api.get_location(id)
+
+            if location is None:
+                raise HTTPError(404, f"Unknown location: {id}")
+
+            path = location.mount_point or location.path
+
+            if not path:
+                raise HTTPError(400, "Location path not known")
 
         try:
-            check_call(["open", "-R", str(image.full_path)])
+            check_call(["open", "-R", str(path)])
         except Exception:
-            raise HTTPError(500, "opening image failed")
+            raise HTTPError(500, f"opening {id_type} failed")
 
         self.write("done")
 
@@ -1916,6 +1944,18 @@ class NavBarHandler(UIModule):
 
     def render(self):
         return self.render_string("modules/navbar.html", navbar=NAVBAR)
+
+
+class LocationDisplayHandler(UIModule):
+    """A Picpocket location"""
+
+    def render(self, location: Location, local_actions: dict, link_id: bool = False):
+        return self.render_string(
+            "modules/location.html",
+            location=location,
+            local_actions=local_actions,
+            link_id=link_id,
+        )
 
 
 class ImageDisplayHandler(UIModule):
@@ -2662,6 +2702,7 @@ def make_app(
         routes,
         template_path=TEMPLATE_DIRECTORY,
         ui_modules={
+            "DisplayLocation": LocationDisplayHandler,
             "DisplayImage": ImageDisplayHandler,
             "DisplayTags": TagDisplayHandler,
             "NavBar": NavBarHandler,
