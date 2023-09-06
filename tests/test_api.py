@@ -55,15 +55,17 @@ def check_tag_dict(actual, expected):
 
 @pytest.mark.asyncio
 async def test_add_location(load_api, tmp_path):
+    from picpocket.errors import InputValidationError, InvalidPathError
+
     async with load_api() as api:
         # must be at least one of source, destination
-        with pytest.raises(ValueError):
+        with pytest.raises(InputValidationError):
             await api.add_location("main", removable=True)
 
         assert await api.get_location("main") is None
 
         # non-removable location must have a path
-        with pytest.raises(ValueError):
+        with pytest.raises(InputValidationError):
             await api.add_location("main", destination=True, removable=False)
 
         assert await api.get_location("main") is None
@@ -71,7 +73,7 @@ async def test_add_location(load_api, tmp_path):
         # path must be a directory
         (tmp_path / "file").write_text("I'm a file")
         for path in (tmp_path / "non-existent", tmp_path / "file"):
-            with pytest.raises(ValueError):
+            with pytest.raises(InvalidPathError):
                 await api.add_location("main", path, destination=True)
 
             assert await api.get_location("main") is None
@@ -121,6 +123,12 @@ async def test_add_location(load_api, tmp_path):
 
 @pytest.mark.asyncio
 async def test_edit_location(load_api, tmp_path):
+    from picpocket.errors import (
+        InputValidationError,
+        InvalidPathError,
+        UnknownItemError,
+    )
+
     async with load_api() as api:
         await api.add_location("main", destination=True)
         camera_directory = tmp_path / "camera"
@@ -137,13 +145,13 @@ async def test_edit_location(load_api, tmp_path):
         camera = await api.get_location("camera")
 
         # edits must make changes
-        with pytest.raises(ValueError):
+        with pytest.raises(InputValidationError):
             await api.edit_location("main")
 
         assert await api.get_location("main") == main
 
         # edits must be on real locations
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.edit_location("man", source=True)
 
         # can't rename to conflicting name
@@ -155,7 +163,7 @@ async def test_edit_location(load_api, tmp_path):
         # can't move to bad path
         (tmp_path / "file").write_text("I'm a file")
         for path in (tmp_path / "non-existent", tmp_path / "file"):
-            with pytest.raises(ValueError):
+            with pytest.raises(InvalidPathError):
                 await api.edit_location("main", path=path)
 
             assert (await api.get_location("main")).path is None
@@ -205,6 +213,7 @@ async def test_edit_location(load_api, tmp_path):
 @pytest.mark.asyncio
 async def test_remove_location(load_api, tmp_path, image_files):
     from picpocket.database.types import Location
+    from picpocket.errors import DataIntegrityError, UnknownItemError
 
     async with load_api() as api:
         main = tmp_path / "main"
@@ -235,7 +244,7 @@ async def test_remove_location(load_api, tmp_path, image_files):
             shutil.copy2(image_files[0], path)
 
         await api.import_location(main_id)
-        with pytest.raises(Exception):
+        with pytest.raises(DataIntegrityError):
             await api.remove_location(main_id)
         assert len(list(main.iterdir())) == 3
 
@@ -251,7 +260,7 @@ async def test_remove_location(load_api, tmp_path, image_files):
         assert len(await api.list_locations()) == 0
 
         # can't remove a non-location
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.remove_location("man")
 
 
@@ -297,6 +306,8 @@ async def test_list_locations(load_api, tmp_path):
 
 @pytest.mark.asyncio
 async def test_mount_locations(load_api, tmp_path):
+    from picpocket.errors import InvalidPathError
+
     async with load_api() as api:
         id = await api.add_location("external", destination=True)
         other_id = await api.add_location("other", destination=True)
@@ -316,10 +327,10 @@ async def test_mount_locations(load_api, tmp_path):
         assert (await api.get_location(other_id)).mount_point is None
 
         # mounting should fail on non-directories
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.mount(id, tmp_path / "fake")
         (tmp_path / "file").write_text("this is a file")
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.mount(id, tmp_path / "file")
         assert api.mounts == {id: tmp_path / "new"}
 
@@ -348,6 +359,7 @@ async def test_mount_locations(load_api, tmp_path):
 @pytest.mark.asyncio
 async def test_import_locations(load_api, tmp_path, image_files, test_images):
     from picpocket.database import logic
+    from picpocket.errors import InvalidPathError, UnknownItemError
 
     files = {}
     for root in ("main", "removable", "removable2"):
@@ -441,22 +453,22 @@ async def test_import_locations(load_api, tmp_path, image_files, test_images):
                 assert image.creator == "reimport"
 
         # unknown location
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.import_location("fake")
 
         removable = await api.get_location("removable")
 
         # path must be given
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.import_location("removable")
 
         # path must exist
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.mount("removable", tmp_path / "fake")
             await api.import_location("removable")
 
         # path can't be a file
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.mount("removable", Path(__file__))
             await api.import_location("removable")
 
@@ -537,7 +549,7 @@ async def test_import_locations(load_api, tmp_path, image_files, test_images):
         dne.mkdir()
         id = await api.add_location("fake-path", dne, destination=True)
         dne.rmdir()
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.import_location(id)
 
         file = tmp_path / "filename"
@@ -545,13 +557,14 @@ async def test_import_locations(load_api, tmp_path, image_files, test_images):
         id = await api.add_location("filename", file, destination=True)
         file.rmdir()
         file.write_text("I'm a file!")
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.import_location(id)
 
 
 @pytest.mark.asyncio
 async def test_tasks(load_api, tmp_path, image_files):
     from picpocket.database.types import Task
+    from picpocket.errors import InvalidPathError, UnknownItemError
     from picpocket.images import hash_image
 
     async with load_api() as api:
@@ -566,15 +579,15 @@ async def test_tasks(load_api, tmp_path, image_files):
         )
 
         # invalid locations
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.add_task("invalid", "fake", "destination")
         await api.get_task("invalid") is None
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.add_task("invalid", "source", "fake")
         await api.get_task("invalid") is None
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.run_task("invalid")
 
         assert [] == await api.list_tasks()
@@ -874,7 +887,7 @@ async def test_tasks(load_api, tmp_path, image_files):
         await api.mount("rdestination", rdestination)
 
         # source unmounted
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.run_task("removable")
 
         assert (await api.get_task("removable")).last_ran is None
@@ -902,7 +915,7 @@ async def test_tasks(load_api, tmp_path, image_files):
 
         # destination unmounted
         await api.unmount("rdestination")
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.run_task("removable")
         assert (await api.get_task("removable")).last_ran == last_ran
 
@@ -913,6 +926,7 @@ async def test_tasks(load_api, tmp_path, image_files):
 @pytest.mark.asyncio
 async def test_add_image_copy(load_api, tmp_path, image_files):
     from picpocket.database.types import Image
+    from picpocket.errors import InvalidPathError
     from picpocket.images import hash_image
 
     async with load_api() as api:
@@ -939,14 +953,14 @@ async def test_add_image_copy(load_api, tmp_path, image_files):
         # can't copy to an existing location
         source = tmp_path / "other.jpg"
         shutil.copy2(image_files[1], source)
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.add_image_copy(source, "location", "copied-image.jpg")
         assert hash_image(copied) == hash_image(image)
 
         # can't copy even if the source file no longer exists (but is in
         # the db)
         copied.unlink()
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.add_image_copy(source, "location", "copied-image.jpg")
         assert hash_image(image) == (await api.get_image(image_id)).hash
 
@@ -985,7 +999,7 @@ async def test_add_image_copy(load_api, tmp_path, image_files):
         remote_dir = tmp_path / "remote"
         remote_dir.mkdir()
         destination = remote_dir / "test.jpg"
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.add_image_copy(image_files[0], remote, destination, caption="no")
 
         await api.mount("remote", remote_dir)
@@ -1140,6 +1154,12 @@ async def test_tag_untag_image(load_api, tmp_path, image_files):
 
 @pytest.mark.asyncio
 async def test_move_image(load_api, tmp_path, image_files):
+    from picpocket.errors import (
+        InputValidationError,
+        InvalidPathError,
+        UnknownItemError,
+    )
+
     async with load_api() as api:
         ids = {}
         filename = "a.jpg"
@@ -1178,7 +1198,7 @@ async def test_move_image(load_api, tmp_path, image_files):
 
         # can't move an unknown image
         image = (await api.search_images(order=("-id",)))[0]
-        with pytest.raises(Exception):
+        with pytest.raises(UnknownItemError):
             await api.move_image(image.id + 1, "fake.jpg")
 
         image = await api.find_image(tmp_path / "main" / filename)
@@ -1186,7 +1206,7 @@ async def test_move_image(load_api, tmp_path, image_files):
 
         # can't move image to same location
         main = tmp_path / "main"
-        with pytest.raises(Exception):
+        with pytest.raises(InputValidationError):
             await api.move_image(image.id, image.path)
 
         assert (main / filename).exists()
@@ -1195,7 +1215,7 @@ async def test_move_image(load_api, tmp_path, image_files):
         # can't move image to a taken location
         taken = main / "taken.jpg"
         shutil.copy2(image_files[1], taken)
-        with pytest.raises(Exception):
+        with pytest.raises(InvalidPathError):
             await api.move_image(image.id, taken.name)
 
         assert (main / filename).exists()
@@ -1230,7 +1250,7 @@ async def test_move_image(load_api, tmp_path, image_files):
         image = new_image
 
         # move to an unknown location
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.move_image(
                 image.id,
                 Path("new.jpg"),
@@ -1239,7 +1259,7 @@ async def test_move_image(load_api, tmp_path, image_files):
         assert (main / "1" / "2" / "3.jpg").exists()
 
         # can't move to an existing image
-        with pytest.raises(Exception):
+        with pytest.raises(InvalidPathError):
             await api.move_image(image.id, filename, location=ids["other"])
 
         assert (main / "1" / "2" / "3.jpg").exists()
@@ -1269,20 +1289,20 @@ async def test_move_image(load_api, tmp_path, image_files):
         # passing a name of a directory should fail
         subdirectory = tmp_path / "other" / "subdirectory"
         subdirectory.mkdir()
-        with pytest.raises(Exception):
+        with pytest.raises(InputValidationError):
             await api.move_image(image.id, subdirectory)
         assert (tmp_path / "other" / "new.jpg").exists()
         assert subdirectory.is_dir()
         assert not (subdirectory / "new.jpg").exists()
 
         # passing an unmounted location should fail
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.move_image(image.id, Path("new.jpg"), location=ids["unmounted"])
 
         assert (tmp_path / "other" / "new.jpg").exists()
         assert not (tmp_path / "external" / "new.jpg").exists()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.move_image(image.id, Path("new.jpg"), location=ids["external"])
 
         assert (tmp_path / "other" / "new.jpg").exists()
@@ -1297,7 +1317,7 @@ async def test_move_image(load_api, tmp_path, image_files):
         # neither source nor destination exist
         new_path = tmp_path / "main" / "was-moved.jpg"
         shutil.move(tmp_path / "external" / "new.jpg", new_path)
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.move_image(
                 image.id, Path("wrong-location.jpg"), location=ids["main"]
             )
@@ -1315,13 +1335,13 @@ async def test_move_image(load_api, tmp_path, image_files):
         # move from an unmounted location should fail
         image = await api.find_image(tmp_path / "external" / filename)
         await api.unmount(ids["external"])
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.move_image(image.id, Path("can't-move.jpg"))
         assert (tmp_path / "external" / filename).exists()
 
         # path known but not present
         unmounted_image = await api.find_image(path)
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.move_image(unmounted_image.id, Path("can't-move.jpg"))
         assert unmounted_image == await api.find_image(
             tmp_path / "unmounted" / filename
@@ -1330,7 +1350,7 @@ async def test_move_image(load_api, tmp_path, image_files):
         # can't move to impossible destinations
         (tmp_path / "external" / "file.txt").write_text("hello")
         await api.mount(ids["external"], tmp_path / "external")
-        with pytest.raises(Exception):
+        with pytest.raises(InvalidPathError):
             await api.move_image(image.id, Path("file.txt") / "oops.jpg")
         assert (tmp_path / "external" / filename).exists()
         assert (tmp_path / "external" / "file.txt").read_text() == "hello"
@@ -1494,6 +1514,8 @@ async def test_find_image(load_api, tmp_path, image_files):
 
 @pytest.mark.asyncio
 async def test_verify_image_files(load_api, tmp_path, image_files, test_images):
+    from picpocket.errors import InvalidPathError, UnknownItemError
+
     async with load_api() as api:
         ids = {}
         images = {}
@@ -1574,19 +1596,19 @@ async def test_verify_image_files(load_api, tmp_path, image_files, test_images):
                 await api.unmount(ids[location])
 
         # unknown location
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await api.verify_image_files(location=max(ids.values()) + 1)
 
         # missing location
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.verify_image_files(location=ids["missing"])
 
         # unattached (provided)
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.verify_image_files(location=ids["unmounted"])
 
         # unattached (not provided)
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await api.verify_image_files(location=ids["external"])
 
         # mounted eternal

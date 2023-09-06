@@ -23,6 +23,12 @@ from picpocket.database.logic import (
     escape,
 )
 from picpocket.database.types import Image, Location, Tag, Task
+from picpocket.errors import (
+    DataIntegrityError,
+    InputValidationError,
+    InvalidPathError,
+    UnknownItemError,
+)
 from picpocket.images import hash_image, image_info
 from picpocket.internal_use import NotSupplied
 from picpocket.tasks import PathPart, load_path
@@ -503,13 +509,17 @@ class DbApi(PicPocket, ABC):
         removable: bool = True,
     ) -> int:
         if not (source or destination):
-            raise ValueError("A location must be a source, destination, or both")
+            raise InputValidationError(
+                "A location must be a source, destination, or both"
+            )
 
         if not (path or removable):
-            raise ValueError("Non-removable storage must have a supplied path")
+            raise InputValidationError(
+                "Non-removable storage must have a supplied path"
+            )
 
         if path and not path.is_dir():
-            raise ValueError(f"Supplied path ({path}) is not a directory")
+            raise InvalidPathError(f"Supplied path ({path}) is not a directory")
 
         values = {
             "name": name,
@@ -564,7 +574,7 @@ class DbApi(PicPocket, ABC):
 
         if not isinstance(path, NotSupplied):
             if path and not path.is_dir():
-                raise ValueError(f"Supplied path ({path}) is not a directory")
+                raise InvalidPathError(f"Supplied path ({path}) is not a directory")
 
             fields.append("path")
             values["path"] = str(path.absolute()) if path else None
@@ -583,7 +593,7 @@ class DbApi(PicPocket, ABC):
                 values[field] = value
 
         if not fields:
-            raise ValueError(f"No edits made to location {name_or_id}")
+            raise InputValidationError(f"No edits made to location {name_or_id}")
 
         statement = self.sql.format(
             "UPDATE locations SET {} WHERE {} = {} RETURNING id;",
@@ -608,7 +618,7 @@ class DbApi(PicPocket, ABC):
             row = await cursor.fetchone()
 
         if row is None:
-            raise ValueError(f"Editing location {name_or_id} failed")
+            raise UnknownItemError(f"Unknown location {name_or_id}")
 
     async def remove_location(
         self,
@@ -630,7 +640,7 @@ class DbApi(PicPocket, ABC):
                 )
                 row = await cursor.fetchone()
                 if not row:
-                    raise ValueError(f"Unknown location {name_or_id}")
+                    raise UnknownItemError(f"Unknown location {name_or_id}")
                 else:
                     (id,) = row
             else:
@@ -646,7 +656,7 @@ class DbApi(PicPocket, ABC):
                 if force:
                     self.logger.warning("Deleting %s images", num_images)
                 else:
-                    raise ValueError(
+                    raise DataIntegrityError(
                         f"Cannot delete location ({name_or_id}). "
                         f"{num_images} images are associated with the location."
                     )
@@ -701,7 +711,7 @@ class DbApi(PicPocket, ABC):
             location = Location(*row, mount_point=self.mounts.get(row[0]))
 
         if expect and row is None:
-            raise ValueError(f"Could not find location: {name_or_id}")
+            raise UnknownItemError(f"Could not find location: {name_or_id}")
 
         return location
 
@@ -734,7 +744,7 @@ class DbApi(PicPocket, ABC):
     def _mount(self, id: int, path: Path):
         path = path.absolute()
         if not path.is_dir():
-            raise ValueError(f"No directory named {path}")
+            raise InvalidPathError(f"No directory named {path}")
 
         self.mounts[id] = path
 
@@ -756,13 +766,13 @@ class DbApi(PicPocket, ABC):
 
         path = self.mounts.get(location.id) or location.path
         if path is None:
-            raise ValueError(f"Location {location.name} not mounted")
+            raise InvalidPathError(f"Location {location.name} not mounted")
 
         if not path.exists():
-            raise ValueError(f"Location {location.name} not found at {path}")
+            raise InvalidPathError(f"Location {location.name} not found at {path}")
 
         if not path.is_dir():
-            raise ValueError(f"Location {location.name} not a directory: {path}")
+            raise InvalidPathError(f"Location {location.name} not a directory: {path}")
 
         if not file_formats:
             file_formats = set(self.configuration.contents["files"]["formats"])
@@ -840,10 +850,7 @@ class DbApi(PicPocket, ABC):
                 file_formats=file_formats,
                 force=force,
             ):
-                raise ValueError(
-                    "Failed to create task {name}. "
-                    "If you're trying to edit a task, pass force=True"
-                )
+                raise InputValidationError("Failed to create task {name}.")
 
     async def _add_task(
         self,
@@ -894,12 +901,12 @@ class DbApi(PicPocket, ABC):
 
         location = await self._get_location(cursor, source)
         if location is None:
-            raise ValueError(f"Unkown source: {source}")
+            raise UnknownItemError(f"Unkown source: {source}")
         source = location.id
 
         location = await self._get_location(cursor, destination)
         if location is None:
-            raise ValueError(f"Unkown destination: {destination}")
+            raise UnknownItemError(f"Unkown destination: {destination}")
         destination = location.id
 
         values = {
@@ -983,7 +990,7 @@ class DbApi(PicPocket, ABC):
             row = await cursor.fetchone()
 
             if not row:
-                raise ValueError(f"Unknown task: {name}")
+                raise UnknownItemError(f"Unknown task: {name}")
 
             source_id, destination_id, configuration = row
             if self.TASKS_TABLE["configuration"] == Types.TEXT:
@@ -1021,7 +1028,7 @@ class DbApi(PicPocket, ABC):
                 source_root = cast(Location, location).path
 
                 if not source_root:
-                    raise ValueError("Source not mounted")
+                    raise InvalidPathError("Source not mounted")
 
             destination_root = self.mounts.get(destination_id)
             if not destination_root:
@@ -1030,7 +1037,7 @@ class DbApi(PicPocket, ABC):
                 destination_root = cast(Location, location).path
 
                 if not destination_root:
-                    raise ValueError("Destination not mounted")
+                    raise InvalidPathError("Destination not mounted")
 
             creator = configuration.get("creator")
             tags.extend(configuration.get("tags", []))
@@ -1297,7 +1304,7 @@ class DbApi(PicPocket, ABC):
             root = self.mounts.get(location.id, location.path)
 
             if root is None:
-                raise ValueError(f"Unknown path for location {name_or_id}")
+                raise InvalidPathError(f"Unknown path for location {name_or_id}")
 
             tag_ids = []
             if tags:
@@ -1325,7 +1332,7 @@ class DbApi(PicPocket, ABC):
             )
 
             if image_id is None:
-                raise ValueError(f"Image already exists at {root /destination}")
+                raise InvalidPathError(f"Image already exists at {root / destination}")
 
         return image_id
 
@@ -1640,7 +1647,7 @@ class DbApi(PicPocket, ABC):
                 values[key] = value
 
         if not fields:
-            raise ValueError(f"No edits to image {id} requested")
+            raise InputValidationError(f"No edits to image {id} requested")
 
         statement = self.sql.format(
             "UPDATE images SET {} WHERE id = {} RETURNING id;",
@@ -1665,7 +1672,7 @@ class DbApi(PicPocket, ABC):
             row = await cursor.fetchone()
 
         if not row:
-            raise ValueError(f"Editing image {id} failed")
+            raise UnknownItemError(f"Unknown image: {id}")
 
     async def tag_image(self, id: int, tag: str):
         async with (
@@ -1713,7 +1720,7 @@ class DbApi(PicPocket, ABC):
             image = await self._get_image(cursor, id)
 
             if image is None:
-                raise ValueError(f"Unknown image: {id}")
+                raise UnknownItemError(f"Unknown image: {id}")
 
             source_root = self.mounts.get(image.location)
 
@@ -1727,12 +1734,12 @@ class DbApi(PicPocket, ABC):
                 if source_location.path:
                     source_root = source_location.path
                 else:
-                    raise ValueError(
+                    raise InvalidPathError(
                         f"Path not supplied for location: {image.location}"
                     )
 
             if not source_root.is_dir():
-                raise ValueError(f"Source location not mounted at {source_root}")
+                raise InvalidPathError(f"Source location not mounted at {source_root}")
 
             if location is None:
                 destination_root = source_root
@@ -1746,15 +1753,19 @@ class DbApi(PicPocket, ABC):
                     destination_location = await self._get_location(cursor, location)
 
                     if destination_location is None:
-                        raise ValueError(f"Unknown location: {destination_location}")
+                        raise UnknownItemError(
+                            f"Unknown location: {destination_location}"
+                        )
 
                     if destination_location.path:
                         destination_root = destination_location.path
                     else:
-                        raise ValueError(f"Path not supplied for location: {location}")
+                        raise InvalidPathError(
+                            f"Path not supplied for location: {location}"
+                        )
 
             if not destination_root.is_dir():
-                raise ValueError(
+                raise InvalidPathError(
                     f"Destination location not mounted at {destination_root}"
                 )
 
@@ -1763,21 +1774,23 @@ class DbApi(PicPocket, ABC):
             moved = False
 
             if source == destination:
-                raise ValueError(f"source and destination must be different: {source}")
+                raise InputValidationError(
+                    f"source and destination must be different: {source}"
+                )
 
             if destination.is_dir():
-                raise ValueError("Filename must be supplied")
+                raise InputValidationError("Filename must be supplied")
 
             if not source.is_file():
                 if not destination.is_file():
-                    raise ValueError(f"Image not found at {source}")
+                    raise InvalidPathError(f"Image not found at {source}")
 
                 self.logger.info(
                     "Image already moved from %s to %s", source, destination
                 )
                 moved = True
             elif destination.is_file():
-                raise ValueError(f"File already exists at location {destination}")
+                raise InvalidPathError(f"File already exists at location {destination}")
 
             await cursor.execute(
                 f"""
@@ -1806,8 +1819,11 @@ class DbApi(PicPocket, ABC):
             if moved:
                 await connection.commit()
             else:
-                destination.parent.mkdir(exist_ok=True, parents=True)
-                shutil.move(source, destination)
+                try:
+                    destination.parent.mkdir(exist_ok=True, parents=True)
+                    shutil.move(source, destination)
+                except Exception as exception:
+                    raise InvalidPathError("Moving file failed") from exception
 
     async def remove_image(self, id: int, *, delete: bool = False):
         async with (
@@ -1825,7 +1841,7 @@ class DbApi(PicPocket, ABC):
             row = await cursor.fetchone()
 
             if not row:
-                raise ValueError(f"Unknown image: {id}")
+                raise UnknownItemError(f"Unknown image: {id}")
 
             if delete:
                 location, pathstr = row
@@ -1842,12 +1858,16 @@ class DbApi(PicPocket, ABC):
                     (rootstr,) = row
 
                     if rootstr is None:
-                        raise ValueError(f"Path to location ({location}) not supplied")
+                        raise InvalidPathError(
+                            f"Path to location ({location}) not supplied"
+                        )
 
                     root = Path(rootstr)
 
                 if not root.is_dir():
-                    raise ValueError(f"Location ({location}) not mounted at {root}")
+                    raise InvalidPathError(
+                        f"Location ({location}) not mounted at {root}"
+                    )
 
                 path = root / pathstr
                 if path.exists():
@@ -2309,12 +2329,12 @@ class DbApi(PicPocket, ABC):
                     row = await cursor.fetchone()
 
                     if not row:
-                        raise ValueError(f"Unknown location: {location}")
+                        raise UnknownItemError(f"Unknown location: {location}")
 
                     pathstr, removable = row
 
                     if not pathstr:
-                        raise ValueError(
+                        raise InvalidPathError(
                             f"No information about where {location} is mounted"
                         )
 
@@ -2327,9 +2347,9 @@ class DbApi(PicPocket, ABC):
                     else:
                         search_locations[location] = root
                 elif removable:
-                    raise ValueError(f"Location {location} not mounted at {root}")
+                    raise InvalidPathError(f"Location {location} not mounted at {root}")
                 else:
-                    raise ValueError(f"Location {location} missing!")
+                    raise InvalidPathError(f"Location {location} missing!")
             else:
                 await cursor.execute("SELECT id, path, removable FROM locations;")
                 for id, pathstr, removable in await cursor.fetchall():
@@ -2348,7 +2368,7 @@ class DbApi(PicPocket, ABC):
                         self.logger.warning("Permanent location (%s) missing", id)
 
             if not search_locations:
-                raise ValueError("No valid search locations")
+                raise InputValidationError("No valid search locations")
 
             images = []
             values: dict[str, Any] = {}
@@ -2505,7 +2525,7 @@ class DbApi(PicPocket, ABC):
         return_id: bool = False,
     ) -> Optional[int]:
         if not re.search(r"^([^/]+)(/[^/]+)*$", tag):
-            raise ValueError(f"Illegal tag name: {tag}")
+            raise InputValidationError(f"Illegal tag name: {tag}")
 
         if isinstance(description, NotSupplied):
             conflict_clause = self.sql.format("DO NOTHING")
@@ -2902,13 +2922,13 @@ class DbApi(PicPocket, ABC):
 
                     if part.endswith(NULL_SYMBOL):
                         if nulls:
-                            raise ValueError(raw_part)
+                            raise InputValidationError(raw_part)
 
                         nulls = self.sql.format(" NULLS LAST")
                         part = part[:-1]
 
                     if part not in table:
-                        raise ValueError(f"Unknown property: {part}")
+                        raise InputValidationError(f"Unknown property: {part}")
 
                     order_parts.append(self.sql.identifier(part))
 

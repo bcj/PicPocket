@@ -36,6 +36,7 @@ class Printer:
 @pytest.mark.asyncio
 async def test_mount_requested(load_api, tmp_path):
     from picpocket.cli import mount_requested
+    from picpocket.errors import InvalidPathError, UnknownItemError
 
     async with load_api() as api:
         main_id = await api.add_location("main", destination=True)
@@ -64,17 +65,27 @@ async def test_mount_requested(load_api, tmp_path):
         (tmp_path / "new").mkdir()
         (tmp_path / "fake").mkdir()
         for mounts in (
-            [("main", str(tmp_path / "new")), ("fake", str(tmp_path / "fake"))],
-            [
-                ("main", str(tmp_path / "new")),
-                (main_id + other_id, str(tmp_path / "fake")),
-            ],
             [
                 ("main", str(tmp_path / "new")),
                 (str(other_id), str(tmp_path / "nonexistent")),
             ],
         ):
-            with pytest.raises(ValueError):
+            with pytest.raises(InvalidPathError):
+                await mount_requested(api, mounts)
+
+            assert api.mounts == {
+                main_id: tmp_path / "main",
+                other_id: tmp_path / "other",
+            }
+
+        for mounts in (
+            [
+                ("main", str(tmp_path / "new")),
+                (main_id + other_id, str(tmp_path / "fake")),
+            ],
+            [("main", str(tmp_path / "new")), ("fake", str(tmp_path / "fake"))],
+        ):
+            with pytest.raises(UnknownItemError):
                 await mount_requested(api, mounts)
 
             assert api.mounts == {
@@ -1956,6 +1967,7 @@ async def test_run_location(load_api, tmp_path, image_files):
 @pytest.mark.asyncio
 async def test_run_task(load_api, tmp_path, image_files):
     from picpocket.cli import Output, run_task
+    from picpocket.errors import InvalidPathError, UnknownItemError
 
     async with load_api() as picpocket:
         printer = Printer()
@@ -2090,7 +2102,7 @@ async def test_run_task(load_api, tmp_path, image_files):
         # mounting drives and editing tasks
         await picpocket.edit_location("source", path=None)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidPathError):
             await run_task(
                 picpocket,
                 Namespace(
@@ -2162,7 +2174,7 @@ async def test_run_task(load_api, tmp_path, image_files):
             print=printer.print,
         )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await run_task(
                 picpocket,
                 Namespace(
@@ -2187,6 +2199,7 @@ async def test_run_task(load_api, tmp_path, image_files):
 async def test_run_image(load_api, tmp_path, image_files, test_images):
     from picpocket.cli import Output, run_image
     from picpocket.database import logic
+    from picpocket.errors import UnknownItemError
 
     printer = Printer()
 
@@ -2315,7 +2328,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
         id = int(printer.text())
         assert id == c_id
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await run_image(
                 picpocket,
                 Namespace(
@@ -2858,13 +2871,13 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
         }
 
         # unknown location
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await run_image(
                 picpocket,
                 Namespace(
                     command="image",
                     subcommand="search",
-                    location="unknown location",
+                    location=["unknown location"],
                     skip_location=None,
                     conditions=None,
                     between=None,
@@ -3177,7 +3190,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
         )
         assert printer.lines() == [str(x_id), str(y_id)]
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnknownItemError):
             await run_image(
                 picpocket,
                 Namespace(

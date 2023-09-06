@@ -14,6 +14,7 @@ from picpocket import initialize, load
 from picpocket.api import PicPocket
 from picpocket.database import logic
 from picpocket.database.types import Image
+from picpocket.errors import UnknownItemError
 from picpocket.internal_use import NotSupplied
 from picpocket.parsing import full_path, int_or_str
 from picpocket.web import DEFAULT_PORT, run_server
@@ -855,7 +856,7 @@ async def run_task(picpocket: PicPocket, args: Namespace, print=print):
             task = await picpocket.get_task(args.name)
 
             if task is None:
-                raise ValueError(f"Unknown task: {args.name}")
+                raise UnknownItemError(f"Unknown task: {args.name}")
 
             if args.output == Output.JSON:
                 print(json_dump(task.serialize()))
@@ -1424,7 +1425,7 @@ async def run_image(picpocket: PicPocket, args: Namespace, print=print):
                     if isinstance(location, str):
                         response = await picpocket.get_location(location)
                         if response is None:
-                            raise ValueError(f"Unknown location, {location}")
+                            raise UnknownItemError(f"Unknown location, {location}")
                         location = response.id
 
                     ids.append(location)
@@ -1547,7 +1548,7 @@ async def run_image(picpocket: PicPocket, args: Namespace, print=print):
                 )
 
                 if maybe_image is None:
-                    raise ValueError(f"Could not find image: {args.path}")
+                    raise UnknownItemError(f"Could not find image: {args.path}")
 
                 match args.output:
                     case Output.QUIET:
@@ -1831,7 +1832,7 @@ async def mount_requested(
             for locationstr, pathstr in mounts:
                 location = await api.get_location(int_or_str(locationstr))
                 if location is None:
-                    raise ValueError(f"Unknown location: {locationstr}")
+                    raise UnknownItemError(f"Unknown location: {locationstr}")
                 path = full_path(pathstr)
 
                 await api.mount(location.id, path)

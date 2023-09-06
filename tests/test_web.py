@@ -97,49 +97,63 @@ def parse_form(contents: str) -> dict[str, dict[str, Any]]:
 def parse_locations(contents: str) -> list[dict[str, Any]]:
     """pull locations from a PicPocket page"""
     locations = []
-    for div in BeautifulSoup(contents, "html.parser").find_all(class_="location-info"):
+    for div in BeautifulSoup(contents, "html.parser").find_all(class_="item"):
         location = {}
-        for child in div.children:
-            if isinstance(child, str):
-                continue
 
-            if child.name in ("h1", "h2", "h23"):
-                assert "name" not in location
-                location["name"] = child.text
-            elif child.name == "p":
-                assert "description" not in location
-                location["description"] = child.text
-            elif child.name == "dl":
-                title = None
-                for item in child.children:
-                    if isinstance(item, str):
-                        continue
+        names = div.find_all("h2")
+        assert len(names) == 1
 
-                    if title is None:
-                        assert item.name == "dt"
-                        title = item.text
-                    else:
-                        assert item.name == "dd"
-                        match title:
-                            case "Id:":
-                                location["id"] = int(item.text)
-                            case "Path:":
-                                location["path"] = Path(item.text)
-                            case "Mount Point:":
-                                location["mount"] = Path(item.text)
-                            case "Type:":
-                                location["source"] = item.text == "Source"
-                                location["destination"] = item.text == "Destination"
-                            case "Removable:":
-                                assert item.text in ("yes", "no")
-                                location["removable"] = item.text == "yes"
-                            case _:
-                                raise ValueError(f"Unexpected attribute: {title}")
+        links = names[0].find_all("a")
+        if len(links) == 0:
+            location["name"] = names[0].text
+        elif len(links) == 1:
+            location["name"] = links[0].text
+            location["id"] = int(links[0]["href"].rsplit("/", 1)[-1])
+        else:
+            raise ValueError
 
-                        title = None
+        location_types = div.find_all("h4")
+        assert len(location_types) == 1
 
-                assert title is None
-                locations.append(location)
+        location_type = location_types[0].text
+        if ", " in location_type:
+            location_type, _ = location_type.split(", ")
+            location["removable"] = True
+        else:
+            location["removable"] = False
+
+        location["source"] = location_type == "Source"
+        location["destination"] = not location["source"]
+
+        description = div.find_all("p")
+        if description:
+            location["description"] = "\n".join([p.text for p in description])
+
+        location["actions"] = actions = {}
+        for child in div.find_all(class_="action-link"):
+            actions[child.text] = child["href"]
+
+        lists = div.find_all("dl")
+        assert len(lists) < 2
+        if lists:
+            name = None
+            for item in lists[0].children:
+                if isinstance(item, str):
+                    continue
+
+                if name is None:
+                    assert item.name == "dt"
+                    name = item.text
+                    assert name in ("Path:", "Mount Point:")
+                    name = name[:-1].lower().replace(" ", "_")
+                else:
+                    assert item.name == "dd"
+                    location[name] = Path(item.text)
+                    name = None
+
+            assert name is None
+
+        locations.append(location)
 
     return locations
 
@@ -432,15 +446,17 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
 
         locations = parse_locations(response.text)
         assert len(locations) == 1
+        assert "actions" in locations[0]
         assert locations[0] == {
             "name": "main",
-            "id": main_id,
             "description": "my main image storage",
             "path": main,
             "source": False,
             "destination": True,
             "removable": False,
+            "actions": locations[0]["actions"],
         }
+        assert locations[0]["actions"].keys() == {"Mount", "Import", "Edit", "Remove"}
         main_info = locations[0]
 
         minimal = tmp_path / "minimal"
@@ -459,21 +475,29 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
         locations = parse_locations(response.text)
         assert len(locations) == 1
         minimal_id = int(response.url.rsplit("/", 1)[-1])
+        assert "actions" in locations[0]
         assert locations[0] == {
             "name": "minimal",
-            "id": minimal_id,
             "path": minimal,
             "source": True,
             "destination": False,
             "removable": False,
+            "actions": locations[0]["actions"],
         }
+        assert locations[0]["actions"].keys() == {"Mount", "Edit", "Remove"}
         minimal_info = locations[0]
 
         response = requests.get(f"{base}{root_endpoints['locations']}")
         assert response.status_code == 200
         locations = parse_locations(response.text)
 
-        assert locations in ([main_info, minimal_info], [minimal_info, main_info])
+        assert len(locations) == 2
+        assert {location["id"] for location in locations} == {main_id, minimal_id}
+        for location in locations:
+            if location["id"] == main_id:
+                location == {"id": main_id, **main_info}
+            else:
+                location == {"id": minimal_id, **minimal_info}
 
         # edit
         response = requests.get(f"{api_base}/location/{main_id}/edit")
@@ -509,14 +533,15 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
         locations = parse_locations(response.text)
         assert len(locations) == 1
         assert locations[0] == {
-            "id": main_id,
             "name": "pictures",
             "description": "my pictures",
             "path": main,
             "source": False,
             "destination": True,
             "removable": True,
+            "actions": locations[0]["actions"],
         }
+        assert locations[0]["actions"].keys() == {"Edit", "Mount", "Import", "Remove"}
         main_info = locations[0]
 
         # mount
@@ -531,14 +556,21 @@ async def test_locations(run_web, tmp_path, image_files, test_images):
         locations = parse_locations(response.text)
         assert len(locations) == 1
         assert locations[0] == {
-            "id": main_id,
             "name": "pictures",
             "description": "my pictures",
             "path": main,
-            "mount": main2,
+            "mount_point": main2,
             "source": False,
             "destination": True,
             "removable": True,
+            "actions": locations[0]["actions"],
+        }
+        assert locations[0]["actions"].keys() == {
+            "Edit",
+            "Mount",
+            "Unmount",
+            "Import",
+            "Remove",
         }
         new_main = locations[0]
         response = requests.get(f"{api_base}/location/{main_id}")

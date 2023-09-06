@@ -17,7 +17,12 @@ async def temporary_server(port: int):
         with TemporaryDirectory() as dirname:
             directory = Path(dirname)
 
-            await api.add_location("camera", source=True, removable=True)
+            await api.add_location(
+                "camera",
+                description="Your camera\n\nYou like it.",
+                source=True,
+                removable=True,
+            )
             await api.add_location("main", directory, destination=True)
             await api.add_tag("fake", "a fake tag")
             await api.add_tag("fake/child", "a fake child tag")

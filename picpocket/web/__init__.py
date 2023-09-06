@@ -24,7 +24,8 @@ from tornado.web import Application, HTTPError, RequestHandler, UIModule
 
 from picpocket.api import PicPocket
 from picpocket.database import logic
-from picpocket.database.types import Location, Image
+from picpocket.database.types import Image, Location
+from picpocket.errors import PicPocketError
 from picpocket.images import mime_type
 from picpocket.parsing import full_path, int_or_str
 from picpocket.version import WEB_VERSION
@@ -91,6 +92,30 @@ class BaseHandler(RequestHandler):
             set_count=set_count,
             query=query or "",
             **kwargs,
+        )
+
+    def write_error(self, status_code: int, **kwargs):
+        exception = kwargs["exc_info"][1]
+
+        if isinstance(exception, HTTPError):
+            if exception.__context__:
+                short = exception.log_message
+                description = str(exception.__context__)
+
+                if not isinstance(exception.__context__, PicPocketError):
+                    description = f"Internal Error: {description}"
+            else:
+                short = exception.reason or "Error"
+                description = exception.log_message or "Something went wrong"
+        else:
+            short = "Internal Error"
+            description = repr(exception)
+
+        self.render(
+            "error.html",
+            status_code=status_code,
+            short=short,
+            description=description,
         )
 
     def write_form(
@@ -432,8 +457,8 @@ class LocationsAddHandler(BaseApiHandler):
 
         try:
             name_or_id = await self.api.add_location(**data)
-        except Exception:
-            raise HTTPError(400, "Adding location failed")
+        except Exception as exception:
+            raise HTTPError(400, "Adding location failed") from exception
 
         self.redirect(self.reverse_url("locations-get", name_or_id))
 
@@ -477,13 +502,17 @@ class LocationsMountHandler(BaseApiHandler):
 
         try:
             path = full_path(self.get_body_argument("path"))
-        except Exception:
-            raise HTTPError(400, f"Bad path: {self.get_body_argument('path')}")
+        except Exception as exception:
+            raise HTTPError(
+                400, f"Bad path: {self.get_body_argument('path')}"
+            ) from exception
 
         try:
             await self.api.mount(name_or_id, path)
-        except Exception:
-            raise HTTPError(400, f"Mounting location failed: {name_or_id}")
+        except Exception as exception:
+            raise HTTPError(
+                400, f"Mounting location failed: {name_or_id}"
+            ) from exception
 
         self.redirect(self.reverse_url("locations-get", name_or_id))
 
@@ -502,8 +531,10 @@ class LocationsUnmountHandler(BaseApiHandler):
 
         try:
             await self.api.unmount(name_or_id)
-        except Exception:
-            raise HTTPError(400, f"Unmounting location failed: {name_or_id}")
+        except Exception as exception:
+            raise HTTPError(
+                400, f"Unmounting location failed: {name_or_id}"
+            ) from exception
 
         self.redirect(self.reverse_url("locations-get", name_or_id))
 
@@ -528,8 +559,8 @@ class LocationsImportHandler(BaseApiHandler):
         if batch_str:
             try:
                 kwargs["batch_size"] = int(batch_str)
-            except Exception:
-                raise HTTPError(400, f"Invalid batch size: {batch_str}")
+            except Exception as exception:
+                raise HTTPError(400, f"Invalid batch size: {batch_str}") from exception
 
         tags = self.get_body_arguments("tags", None)
         if not tags:
@@ -555,8 +586,10 @@ class LocationsImportHandler(BaseApiHandler):
                 tags=tags,
                 **kwargs,
             )
-        except Exception:
-            raise HTTPError(400, f"Importing location failed: {name_or_id}")
+        except Exception as exception:
+            raise HTTPError(
+                400, f"Importing location failed: {name_or_id}"
+            ) from exception
 
         await self.display_images(
             imported, "Imported", suggestions=bool(self.suggestions)
@@ -597,8 +630,10 @@ class LocationsEditHandler(BaseApiHandler):
 
         try:
             await self.api.edit_location(name_or_id, new_name, **data)
-        except Exception:
-            raise HTTPError(400, f"Editing location failed: {name_or_id}")
+        except Exception as exception:
+            raise HTTPError(
+                400, f"Editing location failed: {name_or_id}"
+            ) from exception
 
         self.redirect(self.reverse_url("locations-get", name_or_id))
 
@@ -622,8 +657,8 @@ class LocationsRemoveHandler(BaseApiHandler):
 
         try:
             await self.api.remove_location(name_or_id, force=force)
-        except Exception:
-            raise HTTPError(400, "Removing location failed")
+        except Exception as exception:
+            raise HTTPError(400, "Removing location failed") from exception
 
         self.redirect(self.reverse_url("locations"))
 
@@ -1871,12 +1906,12 @@ class ShowInFinderHandler(RequestHandler):
             image = await self.api.get_image(id)
 
             if image is None:
-                raise HTTPError(404, f"Unknown image: {image_id}")
+                raise HTTPError(404, f"Unknown image: {id}")
 
             if not image.full_path:
                 raise HTTPError(400, "Image path not known")
 
-            path = image.full_path
+            path: Optional[Path] = image.full_path
         elif id_type == "location":
             location = await self.api.get_location(id)
 
