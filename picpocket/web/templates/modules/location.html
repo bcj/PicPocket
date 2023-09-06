@@ -1,4 +1,4 @@
-<div class="item">
+<div class="contents">
     <h2>{% if link_id %}<a href="{{reverse_url('locations-get', location.id)}}">{{location.name}}</a>{% else %}{{location.name}}{% end %}</h2>
     <h4>{{"Source" if location.source else "Destination"}}{% if location.removable %}, Removable{% end %}</h4>
     {% if location.description %}{% for line in location.description.splitlines() %}

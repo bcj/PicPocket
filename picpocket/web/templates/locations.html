@@ -24,7 +24,7 @@
         {% if sources %}
         <h2>Sources</h2>
 
-        <article class="item-holder">
+        <article class="contents-holder">
             {% for location in sources %}
             <div class="location-info">
                 {% module DisplayLocation(location, local_actions, link_id=True) %}
@@ -38,7 +38,7 @@
         {% if destinations %}
         <h2>Destinations</h2>
 
-        <article class="item-holder">
+        <article class="contents-holder">
             {% for location in destinations %}
             <div class="location-info">
                 {% module DisplayLocation(location, local_actions, link_id=True) %}

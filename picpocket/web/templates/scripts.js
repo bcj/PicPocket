@@ -65,6 +65,10 @@ function create_tag_form(
     parent_id, name, known_id, tags, suggestions = undefined, default_suggestions = undefined
 ) {
     parent = document.getElementById(parent_id);
+    container = document.createElement("div");
+    container.setAttribute("class", "tag-container");
+    parent.appendChild(container);
+    parent = container;
 
     add_form = document.createElement("form");
     add_form.id = "add-tag-form-" + name;

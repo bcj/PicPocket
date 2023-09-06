@@ -97,7 +97,7 @@ def parse_form(contents: str) -> dict[str, dict[str, Any]]:
 def parse_locations(contents: str) -> list[dict[str, Any]]:
     """pull locations from a PicPocket page"""
     locations = []
-    for div in BeautifulSoup(contents, "html.parser").find_all(class_="item"):
+    for div in BeautifulSoup(contents, "html.parser").find_all(class_="contents"):
         location = {}
 
         names = div.find_all("h2")

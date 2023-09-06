@@ -648,7 +648,7 @@ class LocationsRemoveHandler(BaseApiHandler):
         if location is None:
             raise HTTPError(404, f"Unknown location: {name_or_id}")
 
-        self.write_form("form.html", self.endpoint)
+        self.write_form("check-only.html", self.endpoint)
 
     async def post(self, name_or_id):
         name_or_id = int_or_str(name_or_id)
@@ -1471,7 +1471,7 @@ class ImagesRemoveHandler(BaseApiHandler):
             raise HTTPError(404, f"Unknown image: {image_id}")
 
         self.write_form(
-            "form.html",
+            "check-only.html",
             self.endpoint,
             image=image,
         )
@@ -1614,7 +1614,7 @@ class TagsRemoveHandler(BaseApiHandler):
         if not name:
             raise HTTPError(400, "Please supply a tag name")
 
-        self.write_form("form.html", self.endpoint)
+        self.write_form("check-only.html", self.endpoint)
 
     async def post(self):
         name = self.get_query_argument("name")
@@ -1876,7 +1876,7 @@ class TasksRemoveHandler(BaseApiHandler):
         if task is None:
             raise HTTPError(404, f"Unknown task: {name}")
 
-        self.write_form("form.html", self.endpoint)
+        self.write_form("check-only.html", self.endpoint)
 
     async def post(self, name):
         try:

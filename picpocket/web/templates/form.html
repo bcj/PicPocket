@@ -16,7 +16,7 @@
         <div class="contents">
             {% module DisplayImage(image) %}
 
-            <form id="form" class="box main-form" method="post" {% if parameters and "file" in {field["input"] for field in parameters} %}enctype="multipart/form-data"{% end %}>
+            <form id="form" class="main-form" method="post" {% if parameters and "file" in {field["input"] for field in parameters} %}enctype="multipart/form-data"{% end %}>
                 {% if parameters %}{% set existing_tags = {} %}
                 {% for field in parameters %}
                 <div class="form-item" id="item-{{field['name']}}">
