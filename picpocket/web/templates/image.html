@@ -32,6 +32,7 @@
                 <div class="contents-sidebar">
                     <div id="image-actions" class="actions image-actions">
                         <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
+                        {% if back %}<a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}&repeat={{back.rsplit('/', 1)[-1]}}" title="Copy information from previous image then edit">Repeat</a>{% end %}
                         <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
                         <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
                         {% if "show-file" in local_actions %}<a class="action-link special-action" onClick="call_special_action('{{reverse_url("show-file", image.id)}}', '{{local_actions["show-file"]}}')">Show in Finder</a>{% end %}

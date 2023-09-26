@@ -1303,6 +1303,44 @@ class ImagesEditHandler(BaseApiHandler):
         if image is None:
             raise HTTPError(404, f"Unknown image: {image_id}")
 
+        copy_id = None
+        try:
+            copy_id = int(self.get_query_argument("repeat", ""))
+        except Exception as exception:
+            print(exception)
+            pass
+
+        print(copy_id)
+
+        if copy_id is not None:
+            other_image = await self.api.get_image(copy_id, tags=True)
+
+            if other_image:
+                kwargs = {}
+                if image.creator is None and other_image.creator:
+                    kwargs["creator"] = other_image.creator
+
+                if image.title is None and other_image.title:
+                    kwargs["title"] = other_image.title
+
+                if image.caption is None and other_image.caption:
+                    kwargs["caption"] = other_image.caption
+
+                if image.alt is None and other_image.alt:
+                    kwargs["alt"] = other_image.alt
+
+                if image.rating is None and other_image.rating is not None:
+                    kwargs["rating"] = other_image.rating
+
+                if kwargs:
+                    await self.api.edit_image(image.id, **kwargs)
+
+                for tag in other_image.tags:
+                    if tag not in image.tags:
+                        await self.api.tag_image(image.id, tag)
+
+                image = await self.api.get_image(int(image_id), tags=True)
+
         known_tags = sorted(await self.api.all_tag_names())
 
         default_suggestions = []

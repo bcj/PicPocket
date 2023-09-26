@@ -742,7 +742,10 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             if (index + 1) < count:
                 assert "next" in image
 
-            assert image["actions"].keys() == {"Edit", "Move", "Remove"}
+            if index:
+                assert image["actions"].keys() == {"Edit", "Repeat", "Move", "Remove"}
+            else:
+                assert image["actions"].keys() == {"Edit", "Move", "Remove"}
 
             if index == 1:  # we only need to test this once
                 image1 = image
