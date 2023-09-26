@@ -43,18 +43,6 @@ def parse_endpoints(contents: str) -> dict[str, str]:
     return endpoints
 
 
-def parse_actions(contents: str) -> dict[str, str]:
-    """pull actions from a PicPocket page"""
-
-    endpoints = {}
-    parent = BeautifulSoup(contents, "html.parser").find(id="action")
-    if parent:
-        for child in parent.find_all(name="option"):
-            endpoints[child.text] = child["value"]
-
-    return endpoints
-
-
 def parse_form(contents: str) -> dict[str, dict[str, Any]]:
     inputs = {}
     soup = BeautifulSoup(contents, "html.parser")
@@ -207,70 +195,71 @@ def parse_image(soup: str | BeautifulSoup) -> dict[str, Any]:
         source = tag.find("video").find("source")
         image["video"] = source["src"]
 
-    p = tag.find("p")
-    if p:
-        image["caption"] = p.text
-
-    div = soup.find(class_="image-info")
-    actions = div.find(class_="actions")
     image["actions"] = {}
-    for link in actions.find_all("a"):
-        if "previous" in link.text.lower():
-            image["previous"] = link["href"]
-        elif "next" in link.text.lower():
-            image["next"] = link["href"]
-        else:
-            image["actions"][link.text] = link["href"]
+    for actions in soup.find_all(class_="actions"):
+        for link in actions.find_all("a"):
+            if "previous" in link.text.lower():
+                image["previous"] = link["href"]
+            elif "next" in link.text.lower():
+                image["next"] = link["href"]
+            else:
+                image["actions"][link.text] = link["href"]
 
     name = None
     found = set()
-    dl = div.find("dl")
-    for tag in dl.children:
-        if isinstance(tag, str):
-            continue
 
-        if tag.name == "dt":
-            if name:
-                raise ValueError(f"missing value for {name}")
-            elif tag.name in found:
-                raise ValueError(f"Duplicate key {name}")
-            name = tag.text
-            found.add(name)
-        else:
-            if not name:
-                raise ValueError(f"missing key for {tag.text}")
+    for dl in soup.find_all("dl"):
+        for tag in dl.children:
+            if isinstance(tag, str):
+                continue
 
-            match name:
-                case "Id:":
-                    image["id"] = int(tag.text)
-                case "Path:":
-                    if ": " in tag.text:
-                        found.add("Location: ")
-                        location, pathstr = tag.text.split(": ")
-                        image["location"] = location
-                        image["path"] = Path(pathstr)
-                    else:
-                        image["full_path"] = Path(tag.text)
-                case "Location:":
-                    image["location"] = tag.text
-                case "Creator:":
-                    image["creator"] = tag.text
-                case "Creation Date:":
-                    image["creation_date"] = tag.text
-                case "Last-Modified Date:":
-                    image["last_modified"] = tag.text
-                case "Rating:":
-                    image["rating"] = int(tag.text)
-                case "Dimensions:":
-                    image["dimensions"] = tuple(map(int, tag.text.split("x")))
-                case "Tags:":
-                    image["tags"] = {}
-                    for link in tag.find_all("a"):
-                        image["tags"][link.text] = link["href"]
-                case _:
-                    raise ValueError(f"Unknown attribute: {name}")
-            name = None
-    assert name is None
+            if tag.name == "dt":
+                if name:
+                    raise ValueError(f"missing value for {name}")
+                elif tag.name in found:
+                    raise ValueError(f"Duplicate key {name}")
+                name = tag.text
+                found.add(name)
+            else:
+                if not name:
+                    raise ValueError(f"missing key for {tag.text}")
+
+                match name:
+                    case "Id:":
+                        image["id"] = int(tag.text)
+                    case "Path:":
+                        if ": " in tag.text:
+                            found.add("Location: ")
+                            location, pathstr = tag.text.split(": ")
+                            image["location"] = location
+                            image["path"] = Path(pathstr)
+                        else:
+                            image["full_path"] = Path(tag.text)
+                    case "Location:":
+                        image["location"] = tag.text
+                    case "Creator:":
+                        image["creator"] = tag.text
+                    case "Creation Date:":
+                        image["creation_date"] = tag.text
+                    case "Last-Modified Date:":
+                        image["last_modified"] = tag.text
+                    case "Description:":
+                        assert tag.text == image["alt"]
+                    case "Notes:":
+                        image["caption"] = tag.text
+                    case "Rating:":
+                        image["rating"] = int(tag.text)
+                    case "Dimensions:":
+                        image["dimensions"] = tuple(map(int, tag.text.split("x")))
+                    case _:
+                        raise ValueError(f"Unknown attribute: {name}")
+                name = None
+        assert name is None
+
+    image["tags"] = {}
+    for item in soup.find_all("li"):
+        link = item.find("a")
+        image["tags"][link.text] = link["href"]
 
     table = soup.find("table")
     if table:
@@ -311,75 +300,82 @@ def parse_tag(contents: str) -> dict[str, Any]:
 
 
 def parse_tasks(contents: str) -> list[dict[str, Any]]:
-    """pull locations from a PicPocket page"""
+    """pull tasks from a PicPocket page"""
     tasks = []
-    for div in BeautifulSoup(contents, "html.parser").find_all(class_="task-info"):
+    for div in BeautifulSoup(contents, "html.parser").find_all(class_="contents"):
         task = {}
-        for child in div.children:
-            if isinstance(child, str):
-                continue
 
-            if child.name in ("h1", "h2", "h23"):
-                assert "name" not in task
-                task["name"] = child.text
-            elif child.name == "p":
-                assert "description" not in task
-                task["description"] = child.text
-            elif child.name == "div":
-                assert "actions" in child["class"]
-                task["actions"] = {}
-                for link in child.find_all("a"):
-                    task["actions"][link.text] = link["href"]
-            elif child.name == "dl":
-                title = None
-                for item in child.children:
-                    if isinstance(item, str):
-                        continue
+        names = div.find_all("h2")
+        assert len(names) == 1
 
-                    if title is None:
-                        assert item.name == "dt"
-                        title = item.text
+        links = names[0].find_all("a")
+        if len(links) == 0:
+            task["name"] = names[0].text
+        elif len(links) == 1:
+            task["name"] = links[0].text
+        else:
+            raise ValueError
+
+        description = div.find_all("p")
+        if description:
+            task["description"] = "\n".join([p.text for p in description])
+
+        task["actions"] = actions = {}
+        for child in div.find_all(class_="action-link"):
+            actions[child.text] = child["href"]
+
+        lists = div.find_all("dl")
+        assert len(lists) < 3
+        if lists:
+            name = None
+            for item in lists[0].children:
+                if isinstance(item, str):
+                    continue
+
+                if name is None:
+                    assert item.name == "dt"
+                    name = item.text
+                    name = name[:-1].lower().replace(" ", "_")
+                else:
+                    assert item.name == "dd"
+                    assert name is not None
+
+                    if name == "configuration":
+                        assert len(lists) == 2
+                        task[name] = configuration = {}
+
+                        name = None
+                        for subitem in lists[1].children:
+                            if isinstance(subitem, str):
+                                continue
+
+                            if name is None:
+                                assert subitem.name == "dt"
+                                name = subitem.text
+                                name[:-1].lower().replace(" ", "_")
+                            else:
+                                assert subitem.name == "dd"
+                                assert name is not None
+
+                                sublist = subitem.find_all("li")
+                                if sublist:
+                                    configuration[name] = [
+                                        i.text.strip() for i in sublist
+                                    ]
+                                else:
+                                    configuration[name] = subitem.text.strip()
+
+                                name = None
+
+                        assert name is None
+
                     else:
-                        assert item.name == "dd"
-                        assert title not in task
-                        match title:
-                            case "Last Ran:":
-                                task["last-ran"] = item.text
-                            case "Source:":
-                                task["source"] = item.text
-                            case "Destination:":
-                                task["destination"] = item.text
-                            case "Configuration:":
-                                configuration = {}
-                                config_title = None
-                                for tag in item.find("dl").find_all(["dt", "dd"]):
-                                    if config_title is None:
-                                        assert tag.name == "dt"
-                                        config_title = tag.text
-                                    else:
-                                        assert config_title
-                                        assert config_title not in configuration
-                                        if config_title in ("tags", "formats"):
-                                            value = []
-                                            for item in tag.find_all("li"):
-                                                try:
-                                                    # this still could be tricked but
-                                                    # this is just for testing
-                                                    value.append(json.loads(item.text))
-                                                except Exception:
-                                                    value.append(item.text)
-                                        else:
-                                            value = tag.text.strip()
-                                        configuration[config_title] = value
-                                        config_title = None
-                                task["configuration"] = configuration
-                            case _:
-                                raise ValueError(f"Unexpected attribute: {title}")
+                        task[name] = item.text.strip()
+                        name = None
 
-                        title = None
+            assert name is None
 
-                assert title is None
-                tasks.append(task)
+        tasks.append(task)
 
     return tasks
 
@@ -403,7 +399,7 @@ async def test_api_root(run_web):
         assert response.status_code == 200
         endpoints = parse_endpoints(response.text)
 
-        assert endpoints.keys() == {"locations", "tasks", "images", "tags"}
+        assert endpoints.keys() == {"locations", "tasks", "images", "tags", "search"}
         assert BeautifulSoup(response.text, "html.parser").find(id="actions") is None
 
 
@@ -639,9 +635,6 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         endpoints = parse_endpoints(response.text)
         assert endpoints.keys() == {"search", "find", "upload", "verify"}
 
-        actions = parse_actions(response.text)
-        assert actions.keys() == {"edit", "file", "get", "move", "remove"}
-
         # setup images
         main = tmp_path / "main"
         main.mkdir()
@@ -737,7 +730,6 @@ async def test_images(run_web, tmp_path, image_files, test_images):
                 assert "exif" not in image
                 assert "caption" not in image
 
-            assert image["image"] == actions["file"].format(id=image["id"])
             response = requests.get(f"{base}{image['image']}")
             assert response.status_code == 200
             path = image["full_path"]
@@ -901,6 +893,8 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         assert parse_image(response.text)["id"] == image["id"]
 
         # deleting images
+        assert requests.get(f"{api_base}/image/{image['id']}").status_code == 200
+
         response = requests.get(f"{base}{image['actions']['Remove']}")
         assert response.status_code == 200
         inputs = parse_form(response.text)
@@ -912,10 +906,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         )
         assert response.status_code == 200
         assert not image["full_path"].exists()
-        assert (
-            requests.get(f"{base}{actions['get'].format(id=image['id'])}").status_code
-            == 404
-        )
+        assert requests.get(f"{api_base}/image/{image['id']}").status_code == 404
         deleted = {image["full_path"].name}
 
         assert (
@@ -931,12 +922,7 @@ async def test_images(run_web, tmp_path, image_files, test_images):
             assert response.status_code == 200
             assert image["full_path"].exists()
             deleted.add(image["full_path"].name)
-            assert (
-                requests.get(
-                    f"{base}{actions['get'].format(id=image['id'])}"
-                ).status_code
-                == 404
-            )
+            assert requests.get(f"{api_base}/image/{image['id']}").status_code == 404
 
         assert names == deleted
 
@@ -957,11 +943,12 @@ async def test_images(run_web, tmp_path, image_files, test_images):
         parse_image(response.text)["id"]
         response = requests.post(f"{base}{endpoints['find']}", {"path": str(path2)})
         assert response.status_code == 200
-        image_id2 = parse_image(response.text)["id"]
+        image2 = parse_image(response.text)
+        image_id2 = image2["id"]
 
         path2 = main / "subdirectory" / path2.name
         response = requests.post(
-            f"{base}{actions['move'].format(id=image_id2)}",
+            f"{base}{image2['actions']['Move']}",
             {"path": f"subdirectory/{path2.name}", "location": "main"},
         )
         assert response.status_code == 200
@@ -1487,7 +1474,6 @@ async def test_tags(run_web, tmp_path, image_files):
         get = f"{base}{abc_move.split('?', 1)[0].rsplit('/', 1)[0]}?name={{}}"
 
         response = requests.get(get.format("abc"))
-        print(get.format("abc"))
         assert response.status_code == 200
         tag = parse_tag(response.text)
         assert tag["description"] == "123"

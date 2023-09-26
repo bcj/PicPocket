@@ -4,77 +4,17 @@
     <meta charset="utf-8">
 
     <link rel="stylesheet" type="text/css" href="/style.css" >
-    <title>{{tasks[0].name if len(tasks) == 1 else "Tasks"}}</title>
+    <title>task.name</title>
 </head>
 <body>
     {% module NavBar() %}
 
     <main>
-        {% if not single %}
-        <h1>Tasks</h1>
-
-        <p>
-            Preconfigured jobs for importing images from your devices to the places you store them.
-            Tasks can automatically apply information to the images they copy.
-        </p>
-
-        <div id="endpoints">
-            <a class="action-link" href="{{reverse_url('tasks-add')}}">Add</a>
-        </div>
-
-        <h2>Existing Tasks</h2>
-        {% end %}
-
-        <article>
-            {% if not tasks %}
-            <p>No tasks found</p>
-            {% else %}
-            {% for task in tasks %}
+        <article class="contents-holder">
             <div class="task-info">
-                <h2>{{task.name}}</h2>
-                {% if task.description %}<p>{{task.description}}</p>{% end %}
-                <div class="actions">
-                    <a class="action-link" href="{{reverse_url('tasks-run', task.name)}}">Run</a>
-                    <a class="action-link" href="{{reverse_url('tasks-edit', task.name)}}">Edit</a>
-                    <a class="action-link" href="{{reverse_url('tasks-remove', task.name)}}">Remove</a>
-                </div>
-                <dl>
-                    {% if task.last_ran %}
-                    <dt>Last Ran:</dt>
-                    <dd>{{task.last_ran.strftime("%Y-%m-%d %H:%M:%S")}}
-                    {% end %}
-
-                    <dt>Source:</dt>
-                    <dd>{{location_names.get(task.source) or task.source}}</dd>
-
-                    <dt>Destination:</dt>
-                    <dd>{{location_names.get(task.destination) or task.destination}}</dd>
-
-                    {% if task.configuration %}
-                    <dt>Configuration:</dt>
-                    <dd>
-                        <dl>
-                        {% for key, value in sorted(task.configuration.items()) %}
-                            <dt>{{key}}</dt>
-                            <dd>
-                            {% if isinstance(value, list) %}
-                                <ul>
-                                {% for item in value %}
-                                    <li>{% if isinstance(item, str) %}{{item}}{% else %}{{json_encode(item.serialize(), sort_keys=True)}}{% end %}</li>
-                                {% end %}
-                                </ul>
-                            {% else %}{{value}}{% end %}
-                            </dd>
-                        {% end %}
-                        <dl>
-                    </dd>
-                    {% end %}
-                </dl>
+                {% module DisplayTask(task, location_names=location_names) %}
             </div>
-            {% end %}
-            {% end %}
         </article>
-
     </main>
 </body>
 </html>

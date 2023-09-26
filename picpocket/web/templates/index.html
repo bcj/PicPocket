@@ -23,40 +23,6 @@
         {% end %}
         </dl>
         {% end %}
-
-        {% if actions %}
-        <div id="actions-info">
-            <h2>Resource Actions</h2>
-            <form id="go-to-action" hidden>
-                <input id="id" name="id" type="{{id_type}}" placeholder="id" required>
-                <select id="action" name="action">
-                {% for name, info in actions.items() %}
-                    <option value="{{info.path}}">{{name}}</option>
-                {% end %}
-                </select>
-                <button type="button" onclick="go_to_action('{{id_name}}')" class="go-action">Go</button>
-            </form>
-            <dl id=actions>
-            {% for name, info in actions.items() %}
-                <dt>{{name}}</dt>
-                <dd>{{info.description}}</dd>
-            {% end %}
-            </dl>
-        </div>
-        {% end %}
     </main>
-    {% if actions %}
-    <script type="text/javascript" src="/scripts.js"></script>
-    <script type="text/javascript">
-        function setup_js() {
-            element = document.getElementById("go-to-action");
-            if (element) {
-                element.hidden = false;
-            }
-        }
-
-        window.addEventListener("DOMContentLoaded", setup_js);
-    </script>
-    {% end %}
 </body>
 </html>

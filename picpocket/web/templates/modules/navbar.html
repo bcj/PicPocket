@@ -1,5 +1,5 @@
 <nav>
     {% for name, info in navbar.items() %}
-    <a href="{{info.path}}" title="{{info.title}}">{{name}}</a>
+    <a href="{{info.path}}" title="{{info.title}}">{{info.icon or name}}</a>
     {% end %}
 </nav>

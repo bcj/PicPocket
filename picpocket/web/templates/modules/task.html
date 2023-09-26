@@ -1,0 +1,44 @@
+<div class="contents">
+    <h2>{% if link_id %}<a href="{{reverse_url('tasks-get', task.name)}}">{{task.name}}</a>{% else %}{{task.name}}{% end %}</h2>
+    {% if task.description %}{% for line in task.description.splitlines() %}
+    <p>{{line}}</p>
+    {% end %}{% end %}
+    <div class="actions">
+        <a class="action-link" href="{{reverse_url('tasks-run', task.name)}}">Run</a>
+        <a class="action-link" href="{{reverse_url('tasks-edit', task.name)}}">Edit</a>
+        <a class="action-link" href="{{reverse_url('tasks-remove', task.name)}}">Remove</a>
+    </div>
+
+    <dl>
+        {% if task.last_ran %}
+        <dt>Last Ran:</dt>
+        <dd>{{task.last_ran.strftime("%Y-%m-%d %H:%M:%S")}}
+        {% end %}
+
+        <dt>Source:</dt>
+        <dd>{{location_names.get(task.source) or task.source}}</dd>
+
+        <dt>Destination:</dt>
+        <dd>{{location_names.get(task.destination) or task.destination}}</dd>
+
+        {% if task.configuration %}
+        <dt>Configuration:</dt>
+        <dd>
+            <dl>
+            {% for key, value in sorted(task.configuration.items()) %}
+                <dt>{{key}}</dt>
+                <dd>
+                {% if isinstance(value, list) %}
+                    <ul>
+                    {% for item in value %}
+                        <li>{% if isinstance(item, str) %}{{item}}{% else %}{{json_encode(item.serialize(), sort_keys=True)}}{% end %}</li>
+                    {% end %}
+                    </ul>
+                {% else %}{{value}}{% end %}
+                </dd>
+            {% end %}
+            </dl>
+        </dd>
+        {% end %}
+    </dl>
+</div>

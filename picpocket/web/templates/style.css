@@ -66,6 +66,10 @@ dt {
     font-weight: bold;
 }
 
+dd {
+    word-wrap: break-word;
+}
+
 table {
     border-collapse: collapse;
     border-style: solid;
@@ -93,7 +97,18 @@ th {
     width: max-content;
 }
 
+.with-sidebar {
+    display: grid;
+    grid-template-columns: minmax(66%, 1.75fr) minmax(300px, 0.25fr);
+}
+
+.form-with-sidebar {
+    display: grid;
+    grid-template-columns: minmax(50%, 1.5fr) minmax(600px, 0.5fr);
+}
+
 .contents {
+    border-style: solid;
     background-color: var(--secondary-color);
     border-radius: 1em;
     margin: 0.5em;
@@ -101,6 +116,19 @@ th {
     text-align: left;
     overflow: wrap;
     width: max-content;
+}
+
+.contents-sidebar {
+    border-style: solid;
+    background-color: var(--secondary-color);
+    border-radius: 1em;
+    margin-left: 0.5em;
+    margin-right: 0em;
+    margin-top: 0em;
+    margin-bottom: 0.5em;
+    padding: 0.5em;
+    text-align: left;
+    overflow: wrap;
 }
 
 .contents > h2, h4 {
@@ -112,26 +140,23 @@ th {
 .contents > .actions {
     margin-top: 1em;
     text-align: center;
+    overflow: wrap;
 }
 
 .image-holder {
     padding: 0;
 }
 
-.image-info {
-    padding: 1em;
-    max-width: 600px;
-}
-
-img {
-    max-width: 100%;
+img, video {
+    width: 100%;
     max-height: 100vh;
     height: auto;
+    object-fit: contain;
 }
 
 .main-form {
     padding: 1em;
-    min-width: 600px;
+    min-width: 500px;
     max-width: 1000px;
 }
 
@@ -199,6 +224,8 @@ img {
     padding-top: 0.25em;
     padding-bottom: 0.25em;
     text-align: center;
+    white-space: nowrap;
+    line-height: 2em;
 }
 
 .action-link:hover {

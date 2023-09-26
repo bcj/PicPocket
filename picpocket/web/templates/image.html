@@ -18,80 +18,99 @@
         <h{{1 if image_ids is None else 2}}>{{image.title or f"Image {image.id}"}}</h{{1 if image_ids is None else 2}}>
         {% if set_count and not image_ids %}<h4>{{set_index + 1}} of {{set_count}}</h4>{% end %}
 
-        <article class="contents">
+        <article class="with-sidebar">
             {% module DisplayImage(image) %}
-
-            <div class="box image-info">
-                <div id="image-actions" class="actions image-actions">
-                    {% if back %}<a class="action-link" rel="prev" href="{{back}}{{query}}">← Previous</a>{% end %}
-                    <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
-                    <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
-                    <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
-                    {% if "show-file" in local_actions %}<a class="action-link special-action" onClick="call_special_action('{{reverse_url("show-file", image.id)}}', '{{local_actions["show-file"]}}')">Show in Finder</a>{% end %}
-                    {% if forward %}<a id="forward" class="action-link" rel="next" href="{{forward}}{{query}}">Next →</a>{% end %}
+            <div class="image-info">
+                {% if back or forward %}<div class="contents-sidebar">
+                    <div id="image-actions" class="actions image-actions">
+                        {% if back %}<a class="action-link" rel="prev" href="{{back}}{{query}}">← Previous</a>{% end %}
+                        {% if forward %}<a id="forward" class="action-link" rel="next" href="{{forward}}{{query}}">Next →</a>{% end %}
+                    </div>
                 </div>
-                <dl>
-                    <dt>Id:</dt>
-                    <dd>{{image.id}}</dd>
+                {% end %}
 
-                    <dt>Path:</dt>
-                    {% if image.full_path %}
-                    <dd>{{image.full_path}}</dd>
+                <div class="contents-sidebar">
+                    <div id="image-actions" class="actions image-actions">
+                        <a class="action-link" href="{{reverse_url('images-edit', image.id)}}{{query}}">Edit</a>
+                        <a class="action-link" href="{{reverse_url('images-move', image.id)}}{{query}}">Move</a>
+                        <a class="action-link" href="{{reverse_url('images-remove', image.id)}}{{query}}">Remove</a>
+                        {% if "show-file" in local_actions %}<a class="action-link special-action" onClick="call_special_action('{{reverse_url("show-file", image.id)}}', '{{local_actions["show-file"]}}')">Show in Finder</a>{% end %}
+                    </div>
+                    <dl>
+                        <dt>Id:</dt>
+                        <dd>{{image.id}}</dd>
 
-                    <dt>Location:</dt>
-                    <dd>{{location_name or image.location}}</dd>
-                    {% else %}
-                    <dd>{{location_name or image.location}}: {{image.path}}</dd>
-                    {% end %}
+                        <dt>Path:</dt>
+                        {% if image.full_path %}
+                        <dd>{{image.full_path}}</dd>
 
-                    {% if image.creator %}
-                    <dt>Creator:</dt>
-                    <dd>{{image.creator}}</dd>
-                    {% end %}
-
-                    {% if image.creation_date %}
-                    <dt>Creation Date:</dt>
-                    <dd>{{image.creation_date.astimezone().strftime("%Y-%m-%d %H:%M:%S")}}</dd>
-                    {% end %}
-
-                    {% if image.last_modified %}
-                    <dt>Last-Modified Date:</dt>
-                    <dd>{{image.last_modified.astimezone().strftime("%Y-%m-%d %H:%M:%S")}}</dd>
-                    {% end %}
-
-                    {% if image.rating is not None %}
-                    <dt>Rating:</dt>
-                    <dd>{{image.rating}}</dd>
-                    {% end %}
-
-                    {% if image.width and image.height %}
-                    <dt>Dimensions:</dt>
-                    <dd>{{image.width}}x{{image.height}}</dd>
-                    {% end %}
-
-                    {% if image.tags %}
-                    <dt>Tags:</dt>
-                    <dd>
-                        <ul>
-                        {% for tag in sorted(image.tags) %}
-                            <li><a href="{{reverse_url('tags-get')}}?name={{url_escape(tag)}}">{{tag}}</a></li>
+                        <dt>Location:</dt>
+                        <dd>{{location_name or image.location}}</dd>
+                        {% else %}
+                        <dd>{{location_name or image.location}}: {{image.path}}</dd>
                         {% end %}
-                        </ul>
-                    </dd>
+
+                        {% if image.creation_date %}
+                        <dt>Creation Date:</dt>
+                        <dd>{{image.creation_date.astimezone().strftime("%Y-%m-%d %H:%M:%S")}}</dd>
+                        {% end %}
+
+                        {% if image.last_modified %}
+                        <dt>Last-Modified Date:</dt>
+                        <dd>{{image.last_modified.astimezone().strftime("%Y-%m-%d %H:%M:%S")}}</dd>
+                        {% end %}
+
+                        {% if image.width and image.height %}
+                        <dt>Dimensions:</dt>
+                        <dd>{{image.width}}x{{image.height}}</dd>
+                        {% end %}
+                    </dl>
+                </div>
+
+                {% if image.creator or image.alt or image.caption or image.rating is not None %}<div class="contents-sidebar">
+                    <h4>Details</h4>
+                    <dl>
+                        {% if image.creator %}
+                        <dt>Creator:</dt>
+                        <dd>{{image.creator}}</dd>
+                        {% end %}
+
+                        {% if image.alt %}
+                        <dt>Description:</dt>
+                        <dd>{{image.alt}}</dd>
+                        {% end %}
+
+                        {% if image.caption %}
+                        <dt>Notes:</dt>
+                        <dd>{% if "\n" in image.caption %}{% for line in image.caption.splitlines() %}<p>{{line}}</p>{% end %}{% else %}{{image.caption}}{% end %}</dd>
+                        {% end %}
+
+                        {% if image.rating is not None %}
+                        <dt>Rating:</dt>
+                        <dd>{{image.rating}}</dd>
+                        {% end %}
+                    </dl>
+                </div>{% end %}
+
+                {% if image.tags %}<div class="contents-sidebar">
+                    <h4>Tags</h4>
+                    <ul>
+                    {% for tag in sorted(image.tags) %}
+                        <li><a href="{{reverse_url('tags-get')}}?name={{url_escape(tag)}}">{{tag}}</a></li>
                     {% end %}
-                </dl>
+                    </ul>
+                </div>{% end %}
             </div>
-            {% if image.exif %}
-            <div class="box image-info">
+
+            {% if image.exif %}<div class="contents">
+                <h4>Exif</h4>
                 <table>
-                    <tr><th colspan=2>Exif Data</th></tr>
                     <tr><th>Key</th><th>Value</th></tr>
                     {% for key, value in image.exif.items() %}
                     {% if value is not None %}<tr><td>{{key}}</td><td>{{value}}</td></tr>{% end %}
                     {% end %}
                 </table>
-            </div>
-            {% end %}
+            </div>{% end %}
         </article>
         {% end %}
     </main>

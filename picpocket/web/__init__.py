@@ -24,7 +24,7 @@ from tornado.web import Application, HTTPError, RequestHandler, UIModule
 
 from picpocket.api import PicPocket
 from picpocket.database import logic
-from picpocket.database.types import Image, Location
+from picpocket.database.types import Image, Location, Task
 from picpocket.errors import PicPocketError
 from picpocket.images import mime_type
 from picpocket.parsing import full_path, int_or_str
@@ -56,6 +56,7 @@ class Endpoint:
     submit: Optional[str] = None
     parameters: Optional[list[dict[str, Any]]] = None
     handler: Optional[type[BaseHandler]] = None
+    icon: Optional[str] = None
 
 
 class BaseHandler(RequestHandler):
@@ -1337,14 +1338,9 @@ class ImagesEditHandler(BaseApiHandler):
             except Exception:
                 pass
 
-        existing = image.serialize()
-        if "tags" in existing:
-            existing["tags"] = image.tags
-            existing["existing-tags"] = json.dumps(image.tags)
         self.write_form(
-            "form.html",
+            "edit-image.html",
             self.endpoint,
-            existing=existing,
             image=image,
             known_tags=known_tags,
             suggestions=suggestions,
@@ -1662,10 +1658,9 @@ class TasksHandler(BaseApiHandler):
                         location_names[location_id] = location.name
 
         self.render_web(
-            "task.html",
+            "tasks.html",
             tasks=tasks,
             location_names=location_names,
-            single=False,
         )
 
 
@@ -1780,12 +1775,7 @@ class TasksGetHandler(BaseApiHandler):
                 else:
                     location_names[location_id] = location.name
 
-        self.render_web(
-            "task.html",
-            tasks=[task],
-            location_names=location_names,
-            single=True,
-        )
+        self.render_web("task.html", task=task, location_names=location_names)
 
 
 class TasksEditHandler(BaseApiHandler):
@@ -2020,29 +2010,37 @@ class TagDisplayHandler(UIModule):
         )
 
 
+class TaskDisplayHandler(UIModule):
+    """A Picpocket task"""
+
+    def render(
+        self,
+        task: Task,
+        location_names: Optional[dict[int, str]] = None,
+        link_id: bool = False,
+    ):
+        return self.render_string(
+            "modules/task.html",
+            task=task,
+            location_names=location_names or {},
+            link_id=link_id,
+        )
+
+
 NAVBAR = {
     "home": Endpoint(
         f"{URL_BASE}",
-        "It's PicPocket!",
+        "Home",
         "The root of the PicPocket API",
         handler=ApiRootHandler,
+        icon="🏡",
     ),
-    "locations": Endpoint(
-        f"{URL_BASE}/locations",
-        "Image Sources & Destinations",
-        (
-            "Sources you can import images from (e.g., your camera), "
-            "and destinations you store images (e.g., your Pictures directory)."
-        ),
-    ),
-    "images": Endpoint(
-        f"{URL_BASE}/images",
-        "Your Images",
-        (
-            "Search through and view your images, tag them, and add "
-            "metadata that makes them easier to find and categorize."
-        ),
-        handler=ImagesHandler,
+    "search": Endpoint(
+        f"{URL_BASE}/images/search",
+        "Search Images",
+        "Find images stored in PicPocket",
+        submit="Search",
+        icon="🔍",
     ),
     "tags": Endpoint(
         f"{URL_BASE}/tags",
@@ -2052,6 +2050,17 @@ NAVBAR = {
             "Add/update tag descriptions, or move tags to keep them better "
             "organized."
         ),
+        icon="🏷️",
+    ),
+    "images": Endpoint(
+        f"{URL_BASE}/images",
+        "Your Images",
+        (
+            "Search through and view your images, tag them, and add "
+            "metadata that makes them easier to find and categorize."
+        ),
+        handler=ImagesHandler,
+        icon="🖼️",
     ),
     "tasks": Endpoint(
         f"{URL_BASE}/tasks",
@@ -2062,6 +2071,16 @@ NAVBAR = {
             "Tasks can automatically apply information to the images "
             "they copy."
         ),
+        icon="🎞️",
+    ),
+    "locations": Endpoint(
+        f"{URL_BASE}/locations",
+        "Image Sources & Destinations",
+        (
+            "Sources you can import images from (e.g., your camera), "
+            "and destinations you store images (e.g., your Pictures directory)."
+        ),
+        icon="🗺️",
     ),
 }
 
@@ -2339,57 +2358,6 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
             "Edit information about an image",
             handler=ImagesEditHandler,
             submit="Edit",
-            parameters=[
-                {
-                    "name": "creator",
-                    "description": "Who created the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Creator:",
-                },
-                {
-                    "name": "title",
-                    "description": "The title of the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Title:",
-                },
-                {
-                    "name": "caption",
-                    "description": "The caption of the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Caption:",
-                },
-                {
-                    "name": "alt",
-                    "description": "A description of the image",
-                    "required": False,
-                    "input": "text",
-                    "label": "Alt Text:",
-                },
-                {
-                    "name": "rating",
-                    "description": "Your rating of the image",
-                    "required": False,
-                    "input": "number",
-                    "label": "Rating:",
-                },
-                {
-                    "name": "existing-tags",
-                    "description": "Tags to apply to all imported images.",
-                    "required": False,
-                    "input": "hidden",
-                    "label": "",
-                },
-                {
-                    "name": "tags",
-                    "description": "Tags to apply to all imported images.",
-                    "required": False,
-                    "input": "tags",
-                    "label": "Tags:",
-                },
-            ],
         ),
         "move": Endpoint(
             f"{URL_BASE}/image/{{id}}/move",
@@ -2740,6 +2708,7 @@ def make_app(
             "DisplayLocation": LocationDisplayHandler,
             "DisplayImage": ImageDisplayHandler,
             "DisplayTags": TagDisplayHandler,
+            "DisplayTask": TaskDisplayHandler,
             "NavBar": NavBarHandler,
         },
     )

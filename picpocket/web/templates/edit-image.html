@@ -1,0 +1,76 @@
+{% whitespace all %}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>{{title}}</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>{{title}}</h1>
+        <p>{{description}}</p>
+
+        <article class="form-with-sidebar">
+            {% module DisplayImage(image) %}
+            <div class="contents-sidebar">
+                <form id="form" class="main-form" method="post">
+                    <div class="form-item" id="item-creator">
+                        <label for="creator">Creator: </label>
+                        <input id="creator" name="creator" type="text" title="Who created the image." value="{{image.creator or ''}}">
+                    </div>
+
+                    <div class="form-item" id="item-title">
+                        <label for="title">Title:</label>
+                        <input id="title" name="title" type="text" title="The title of the image." value="{{image.title or ''}}">
+                    </div>
+
+                    <div class="form-item" id="item-caption">
+                        <label for="caption">Caption:</label>
+                        <input id="caption" name="caption" type="text" title="The caption of the image." value="{{image.caption or ''}}">
+                    </div>
+
+                    <div class="form-item" id="item-alt">
+                        <label for="alt">Alt Text:</label>
+                        <input id="alt" name="alt" type="text" title="A description of the image." value="{{image.alt or ''}}">
+                    </div>
+
+                    <div class="form-item" id="item-rating">
+                        <label for="rating">Rating:</label>
+                        <input id="rating" name="rating" type="number" title="Your rating of the image." value="{{image.rating or ''}}">
+                    </div>
+
+                    <div class="form-item" id="item-tags">
+                        <label for="tags">Tags:</label>
+                        <datalist id="known-tags">
+                            {% for tag in known_tags or [] %}
+                            <option value={{tag}} />
+                            {% end %}
+                        </datalist>
+                        <input type="text" name="existing-tags" value="{{json_encode(image.tags)}}" hidden>
+                        <noscript><textarea name="tags-list">{{"\n".join(image.tags)}}</textarea></noscript>
+                    </div>
+
+                    <input type="submit" value="{{submit}}">
+                </form>
+            </div>
+        </article>
+    </main>
+    <script type="text/javascript" src="/scripts.js"></script>
+    <script type="text/javascript">
+        const KNOWN_TAGS = {% raw json_encode(known_tags) %};
+        const CURRENT_TAGS = {% raw json_encode(image.tags) %};
+        const SUGGESTED_TAGS = {% raw json_encode(suggestions or []) %};
+        const DEFAULT_SUGGESTED_TAGS = {% raw json_encode(default_suggestions or []) %}
+
+        function setup_js() {
+            create_tag_form("item-tags", "tags", "known-tags", CURRENT_TAGS, SUGGESTED_TAGS, DEFAULT_SUGGESTED_TAGS);
+            document.getElementById("form").setAttribute("onsubmit", "return select_all('tags')");
+        }
+
+        window.addEventListener("DOMContentLoaded", setup_js);
+    </script>
+</body>
+</html>

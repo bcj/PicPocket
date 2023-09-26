@@ -1,0 +1,38 @@
+{% whitespace all %}<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" type="text/css" href="/style.css" >
+    <title>Tasks</title>
+</head>
+<body>
+    {% module NavBar() %}
+
+    <main>
+        <h1>Tasks</h1>
+
+        <p>
+            Preconfigured jobs for importing images from your devices to the places you store them.
+            Tasks can automatically apply information to the images they copy.
+        </p>
+
+        <div id="endpoints">
+            <a class="action-link" href="{{reverse_url('tasks-add')}}">Add</a>
+        </div>
+
+        {% if tasks %}
+        <h2>Existing Tasks</h2>
+
+        <article class="contents-holder">
+            {% for task in tasks %}
+            <div class="task-info">
+                {% module DisplayTask(task, location_names=location_names, link_id=True) %}
+            </div>
+            {% end %}
+        </article>
+        {% end %}
+
+    </main>
+</body>
+</html>
