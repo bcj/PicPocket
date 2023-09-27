@@ -64,7 +64,7 @@
                     <label for="tags">Tags:</label>
                     <datalist id="known-tags">
                         {% for tag in known_tags or [] %}
-                        <option value={{tag}} />
+                        <option value="{{tag}}" />
                         {% end %}
                     </datalist>
                     <noscript><textarea name="tags-list"></textarea></noscript>

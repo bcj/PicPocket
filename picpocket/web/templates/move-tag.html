@@ -18,7 +18,7 @@
                 <div class="form-item" id="item-new">
                     <datalist id="known-tags">
                         {% for tag in known_tags or [] %}
-                        <option value={{tag}} />
+                        <option value="{{tag}}" />
                         {% end %}
                     </datalist>
                     <label for="new">The New Name</label>
