@@ -1307,10 +1307,8 @@ class ImagesEditHandler(BaseApiHandler):
         try:
             copy_id = int(self.get_query_argument("repeat", ""))
         except Exception as exception:
-            print(exception)
             pass
 
-        print(copy_id)
 
         if copy_id is not None:
             other_image = await self.api.get_image(copy_id, tags=True)
