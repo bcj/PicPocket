@@ -80,15 +80,15 @@
             </datalist>
 			<div id="item-any_tags" class="form-item">
 				<label for="any_tags">Any Tags:</label>
-				<noscript><textarea id="any_tags-list" name="any_tags-list" title="Only return images with at least one matching tag."></textarea></noscript>
+				<noscript><textarea id="any_tags-list" name="any_tags-list" title="Only return images with at least one matching tag.">{% if any_tags %}{{"\n".join(any_tags)}}{% end %}</textarea></noscript>
 			</div>
 			<div id="item-all_tags" class="form-item">
 				<label for="all_tags">All Tags:</label>
-				<noscript><textarea id="all_tags-list" name="all_tags-list" title="Only return images with all supplied tags."></textarea></noscript>
+				<noscript><textarea id="all_tags-list" name="all_tags-list" title="Only return images with all supplied tags.">{% if all_tags %}{{"\n".join(all_tags)}}{% end %}</textarea></noscript>
 			</div>
 			<div id="item-no_tags" class="form-item">
 				<label for="no_tags">No Tags:</label>
-				<noscript><textarea id="no_tags-list" name="no_tags-list" title="Only return images without any supplied tags."></textarea></noscript>
+				<noscript><textarea id="no_tags-list" name="no_tags-list" title="Only return images without any supplied tags.">{% if no_tags %}{{"\n".join(no_tags)}}{% end %}</textarea></noscript>
 			</div>
 
 			<div id="order" class="form-group">

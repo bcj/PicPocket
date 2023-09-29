@@ -36,7 +36,7 @@
             {% end %}
 
             <h3>Images</h3>
-            <a class="action-link" href="{{reverse_url('tags-images')}}?name={{url_escape(tag.name)}}">Tagged Images</a>
+            <a class="action-link" href="{{reverse_url('images-search')}}?all={{url_escape(tag.name)}}&order-property=creation_date&order-direction=descending&order-nulls=last">Tagged Images</a>
 
         </article>
     </main>

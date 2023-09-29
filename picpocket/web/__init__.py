@@ -1663,21 +1663,6 @@ class TagsRemoveHandler(BaseApiHandler):
         self.redirect(self.reverse_url("tags"))
 
 
-class TagsImagesHandler(BaseApiHandler):
-    async def get(self):
-        name = self.get_query_argument("name")
-
-        if not name:
-            raise HTTPError(400, "Please supply a tag name")
-
-        try:
-            ids = await self.api.get_image_ids(all_tags=[name])
-        except Exception:
-            raise HTTPError(500, "Finding tagged images failed")
-
-        await self.display_images(ids, "Tagged", suggestions=bool(self.suggestions))
-
-
 class TasksHandler(BaseApiHandler):
     async def get(self):
         tasks = await self.api.list_tasks()
@@ -2469,12 +2454,6 @@ ACTIONS: dict[str, dict[str, Endpoint]] = {
                     "label": "Cascade:",
                 },
             ],
-        ),
-        "images": Endpoint(
-            f"{URL_BASE}/tag/images",
-            "Get Tagged Images",
-            "Get images tagged with a tag (or its descendents).",
-            handler=TagsImagesHandler,
         ),
     },
     "tasks": {

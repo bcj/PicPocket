@@ -1347,17 +1347,34 @@ async def test_tags(run_web, tmp_path, image_files):
 
             response = requests.get(f"{base}{tag['actions']['Tagged Images']}")
             assert response.status_code == 200
+
+            inputs = parse_form(response.text)
+            assert inputs["all_tags-list"] == {"type": "textarea", "value": name}
+
+            response = requests.post(
+                f"{base}{tag['actions']['Tagged Images']}",
+                {"all_tags-list": [name]},
+            )
             images = parse_all_images(response.text, base)
             assert images.keys() == tagged[name]
 
             if name == "abc":
                 remove_abc = tag["actions"]["Remove"]
-                list_abc = tag["actions"]["Tagged Images"]
+                list_abc = (
+                    tag["actions"]["Tagged Images"],
+                    {"all_tags-list": [name]},
+                )
             elif name == "abc/123":
                 remove_abc_123 = tag["actions"]["Remove"]
-                list_abc_123 = tag["actions"]["Tagged Images"]
+                list_abc_123 = (
+                    tag["actions"]["Tagged Images"],
+                    {"all_tags-list": [name]},
+                )
             elif name == "abc/123/4":
-                list_abc_123_4 = tag["actions"]["Tagged Images"]
+                list_abc_123_4 = (
+                    tag["actions"]["Tagged Images"],
+                    {"all_tags-list": [name]},
+                )
 
             response = requests.get(f"{base}{tag['actions']['Edit']}")
             assert response.status_code == 200
@@ -1386,12 +1403,14 @@ async def test_tags(run_web, tmp_path, image_files):
         response = requests.post(f"{base}{remove_abc_123}")
         assert response.status_code == 200
 
-        response = requests.get(f"{base}{list_abc_123}")
+        uri, args = list_abc_123
+        response = requests.post(f"{base}{uri}", args)
         assert response.status_code == 200
         images = parse_all_images(response.text, base)
         assert images.keys() == {ids[5]}  # children still exist
 
-        response = requests.get(f"{base}{list_abc_123_4}")
+        uri, args = list_abc_123_4
+        response = requests.post(f"{base}{uri}", args)
         assert response.status_code == 200
         images = parse_all_images(response.text, base)
         assert images.keys() == {ids[5]}
@@ -1399,17 +1418,20 @@ async def test_tags(run_web, tmp_path, image_files):
         response = requests.post(f"{base}{remove_abc}", {"cascade": "on"})
         assert response.status_code == 200
 
-        response = requests.get(f"{base}{list_abc}")
+        uri, args = list_abc
+        response = requests.post(f"{base}{uri}", args)
         assert response.status_code == 200
         images = parse_all_images(response.text, base)
         assert images.keys() == set()
 
-        response = requests.get(f"{base}{list_abc_123}")
+        uri, args = list_abc_123
+        response = requests.post(f"{base}{uri}", args)
         assert response.status_code == 200
         images = parse_all_images(response.text, base)
         assert images.keys() == set()
 
-        response = requests.get(f"{base}{list_abc_123_4}")
+        uri, args = list_abc_123_4
+        response = requests.post(f"{base}{uri}", args)
         assert response.status_code == 200
         images = parse_all_images(response.text, base)
         assert images.keys() == set()
