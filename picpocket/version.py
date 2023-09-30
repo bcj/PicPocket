@@ -33,10 +33,10 @@ class Version(NamedTuple):
         return version
 
 
-VERSION = Version(0, 1, 0, label="dev")
-POSTGRES_VERSION = Version(0, 1, 0, label="dev")
-SQLITE_VERSION = Version(0, 1, 0, label="dev")
-WEB_VERSION = Version(0, 1, 0, label="dev")
+VERSION = Version(0, 1, 0)
+POSTGRES_VERSION = Version(0, 1, 0)
+SQLITE_VERSION = Version(0, 1, 0)
+WEB_VERSION = Version(0, 1, 0)
 
 __version__ = str(VERSION)
 
