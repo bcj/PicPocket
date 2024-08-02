@@ -89,7 +89,8 @@ def image_info(path: Path, logger=None) -> tuple[
             height = image.height
 
             try:
-                exif_data = image._getexif()  # this is also grabbing exif ifd
+                # this is also grabbing exif ifd
+                exif_data = image._getexif()  # type: ignore
             except AttributeError:
                 pass  # some image types won't have this
             except Exception:
