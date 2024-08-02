@@ -1,4 +1,5 @@
 """Utilities for image files"""
+
 import json
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -49,9 +50,7 @@ def hash_image(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
 
-def image_info(
-    path: Path, logger=None
-) -> tuple[
+def image_info(path: Path, logger=None) -> tuple[
     Optional[int],
     Optional[int],
     Optional[datetime],

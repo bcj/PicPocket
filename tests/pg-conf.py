@@ -6,6 +6,7 @@ Configure the Postgres Database to use for tests. The options are:
  * docker: Test against a dockerized postgres brought up for tests
  * isolated: Test against a separate dockerized postgres each test
 """
+
 import json
 import random
 from argparse import ArgumentParser

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 """Support for using SQLite as a backend"""
+
 import logging
 import re
 from contextlib import asynccontextmanager

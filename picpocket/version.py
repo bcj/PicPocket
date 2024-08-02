@@ -7,6 +7,7 @@ the frontend API and will at least largely be following SemVer.
 The plan is to keep the DB and the REST API major versions in line with
 the package version.
 """
+
 from typing import NamedTuple, Optional
 
 

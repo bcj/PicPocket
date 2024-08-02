@@ -1,4 +1,5 @@
 """Run PicPocket from the command line"""
+
 import asyncio
 import json
 import logging
