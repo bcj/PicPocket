@@ -81,7 +81,7 @@ class PicPocket(Protocol):
 
         Parse information required for connecting to the underlying
         database PicPocket is built on top of. Backends may take
-        whatever argumetns they want as long as they accept `directory`
+        whatever arguments they want as long as they accept `directory`
         and `store_credentials`
 
         Args:
@@ -115,7 +115,7 @@ class PicPocket(Protocol):
         """
 
     async def get_version(self) -> Version:
-        """Get teh version of the backend API
+        """Get the version of the backend API
 
         Returns:
             The version of the backend interface being used.
