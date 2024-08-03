@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS task_invocations (
 
 CREATE TABLE IF NOT EXISTS images (
     id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    hash CHARACTER (64) NOT NULL,
+    hash CHARACTER(64) NOT NULL,
     -- If exif data can't be read, these values will be the same
     creation_date TIMESTAMP WITH TIME ZONE NOT NULL,
     last_modified TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS images (
     width INTEGER,
     height INTEGER,
     creator TEXT,
-    -- we'll prevent people accidentally deleting their own data at an API level
+    -- we'll prevent people accidentally deleting their data at an API level
     location INTEGER NOT NULL REFERENCES locations (id) ON DELETE CASCADE,
     path TEXT NOT NULL,  -- relative to location
     title TEXT,
@@ -56,12 +56,16 @@ CREATE TABLE IF NOT EXISTS images (
     --     to_tsvector('english', caption)
     -- ) STORED,
     alt TEXT,
-    -- alt_vector TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', alt)) STORED,
+    -- alt_vector TSVECTOR GENERATED ALWAYS AS (
+    --     to_tsvector('english', alt)
+    -- ) STORED,
     rating INTEGER, -- TODO, think if we want to restrict size
     exif JSON NOT NULL,
     UNIQUE (location, path)
 );
--- CREATE INDEX IF NOT EXISTS caption_index ON images USING GIN (caption_vector);
+-- CREATE INDEX IF NOT EXISTS caption_index ON images USING GIN (
+--     caption_vector
+-- );
 -- CREATE INDEX IF NOT EXISTS alt_index ON images USING GIN (alt_vector);
 
 CREATE TABLE IF NOT EXISTS tags (

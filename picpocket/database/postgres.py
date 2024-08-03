@@ -22,8 +22,9 @@ from picpocket.version import Version
 
 LOGGER = logging.getLogger("picpocket.postgres")
 
-TYPES_FILE = Path(__file__).absolute().parent / "postgres_types.sql"
-SCHEMA_FILE = TYPES_FILE.parent / "postgres_schema.sql"
+SCHEMA_DIRECTORY = Path(__file__).absolute().parent / "schema" / "postgres"
+TYPES_FILE = SCHEMA_DIRECTORY / "types.sql"
+SCHEMA_FILE = SCHEMA_DIRECTORY / "schema.sql"
 
 
 class PostgreSQL(SQL):

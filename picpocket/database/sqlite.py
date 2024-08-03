@@ -20,7 +20,8 @@ from picpocket.version import Version
 
 LOGGER = logging.getLogger("picpocket.sqlite")
 
-SCHEMA_FILE = Path(__file__).absolute().parent / "sqlite_schema.sql"
+SCHEMA_DIRECTORY = Path(__file__).absolute().parent / "schema" / "sqlite"
+SCHEMA_FILE = SCHEMA_DIRECTORY / "schema.sql"
 
 DEFAULT_FILENAME = "picpocket.sqlite3"
 
