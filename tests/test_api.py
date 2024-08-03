@@ -1,9 +1,11 @@
 import json
 import os
 import shutil
+import sys
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -1360,8 +1362,10 @@ async def test_move_image(load_api, tmp_path, image_files):
 @pytest.mark.asyncio
 async def test_remove_image(load_api, tmp_path, image_files):
     async with load_api() as api:
+        unique_filename = f"{uuid4().hex}.jpg"
+
         ids = {}
-        filenames = ("a.jpg", "b.JPEG", "c.d/e.png", "f.bmp", "g.gif")
+        filenames = (unique_filename, "b.JPEG", "c.d/e.png", "f.bmp", "g.gif")
 
         for name, save_path, removable in (
             ("main", True, False),
@@ -1391,38 +1395,47 @@ async def test_remove_image(load_api, tmp_path, image_files):
         shutil.rmtree(tmp_path / "unmounted")
 
         # remove an image
-        image = await api.find_image(tmp_path / "main" / "a.jpg")
+        image = await api.find_image(tmp_path / "main" / unique_filename)
         await api.remove_image(image.id, delete=True)
-        assert not (tmp_path / "main" / "a.jpg").exists()
-        assert await api.find_image(tmp_path / "main" / "a.jpg") is None
+        assert not (tmp_path / "main" / unique_filename).exists()
+        assert await api.find_image(tmp_path / "main" / unique_filename) is None
 
         # non-existent image
         with pytest.raises(Exception):
             await api.remove_image(image.id, delete=True)
 
         # not mounted
-        image = await api.find_image(tmp_path / "unmounted" / "a.jpg")
+        image = await api.find_image(tmp_path / "unmounted" / unique_filename)
         with pytest.raises(Exception):
             await api.remove_image(image.id, delete=True)
-        assert image == await api.find_image(tmp_path / "unmounted" / "a.jpg")
+        assert image == await api.find_image(tmp_path / "unmounted" / unique_filename)
 
         await api.mount(ids["external"], tmp_path / "external")
-        image = await api.find_image(tmp_path / "external" / "a.jpg")
+        image = await api.find_image(tmp_path / "external" / unique_filename)
         await api.unmount(ids["external"])
         assert image is not None
         with pytest.raises(Exception):
             await api.remove_image(image.id, delete=True)
         await api.mount(ids["external"], tmp_path / "external")
-        assert image == await api.find_image(tmp_path / "external" / "a.jpg")
+        assert image == await api.find_image(tmp_path / "external" / unique_filename)
         await api.unmount(ids["external"])
-        assert (tmp_path / "external" / "a.jpg").exists()
+        assert (tmp_path / "external" / unique_filename).exists()
 
         # location supplied
         await api.mount(ids["external"], tmp_path / "external")
         await api.remove_image(image.id, delete=True)
-        assert await api.find_image(tmp_path / "external" / "a.jpg") is None
+        assert await api.find_image(tmp_path / "external" / unique_filename) is None
         await api.unmount(ids["external"])
-        assert not (tmp_path / "external" / "a.jpg").exists()
+        assert not (tmp_path / "external" / unique_filename).exists()
+
+        match sys.platform:
+            case "darwin":
+                # Presumably if you're reading this, you're trash
+                # directory isn't here. Please file an issue explaining
+                # the not-at-all weird setup you have.
+                assert (Path.home() / ".Trash" / unique_filename).exists()
+            case _:
+                pass
 
         # don't delete
         image = await api.find_image(tmp_path / "main" / "b.JPEG")

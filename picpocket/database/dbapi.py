@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, AsyncContextManager, AsyncGenerator, Optional, cast
 from uuid import uuid4
 
+from send2trash import send2trash
+
 from picpocket.api import NULL_SYMBOL, PicPocket
 from picpocket.database.logic import (
     SQL,
@@ -1871,7 +1873,7 @@ class DbApi(PicPocket, ABC):
 
                 path = root / pathstr
                 if path.exists():
-                    path.unlink()
+                    send2trash(path)
 
     async def find_image(self, path: Path, tags: bool = False) -> Optional[Image]:
         path = path.absolute()

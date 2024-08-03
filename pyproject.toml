@@ -48,6 +48,7 @@ dependencies = [
     "aiosqlite",
     "cryptography",
     "pillow",
+    "send2trash",
     "tomli-w",
     "tornado",
 ]

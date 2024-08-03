@@ -578,7 +578,8 @@ class PicPocket(Protocol):
             id: The image to remove from PicPocket
             delete: Delete the image on-disk as well. If `True`, the
                 image will only be removed from PicPocket if the
-                delete is successful
+                delete is successful. Deleted files will be sent to the
+                trash.
         """
 
     async def get_image(self, id: int, tags: bool = False) -> Optional[Image]:
