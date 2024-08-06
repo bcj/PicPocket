@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from subprocess import check_call
 from typing import Any, Iterable, Optional
 
 import psycopg
@@ -258,6 +260,70 @@ class Postgres(DbApi):
             version = Version(*rows[0])
 
             return version == SCHEMA_VERSION
+
+    async def create_backup(self, path: Path) -> Path:
+        """Backup PicPocket data
+
+        Create a backup of PicPocket's backend (locations, tasks, image
+        info, tags).
+
+        Returns:
+            The path to the generated backup file.
+
+        .. note::
+            Unlike `export_data`, this stores the data in a
+            backend-specific way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
+
+        .. note::
+            `create_backup` may not be implemented for all backends.
+
+        .. warning::
+            This file will not contain the images themselves, just the
+            metadata you've created for the image (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The directory to save the backup to. The format of
+                the resulting backup is backend-specific. With the
+                Postgres backend, the backup will be created using
+                `pg_dump`' default format. If the supplied path is
+                an existing directory, it will be saved to a
+                subdirectory with the name picpocket-<VERSION>-<DATE>.sql
+        """
+        if path.is_dir():
+            version = await self.get_version()
+            path = path / f"picpocket-{version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sql"
+
+        path.parent.mkdir(exist_ok=True, parents=True)
+
+        connection_info = self.configuration.contents["backend"]["connection"]
+
+        command = [
+            "pg_dump",
+            "--clean",
+            "--file",
+            str(path),
+            "--dbname",
+            connection_info["dbname"],
+            "--host",
+            connection_info["host"],
+            "--port",
+            str(connection_info["port"]),
+            "--username",
+            connection_info["user"],
+        ]
+
+        if connection_info["password"]:
+            command.extend(("--password", connection_info["password"]))
+        else:
+            command.append("--no-password")
+
+        check_call(command)
+
+        return path
 
 
 def _get_types() -> set[str]:

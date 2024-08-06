@@ -127,14 +127,43 @@ class PicPocket(Protocol):
         Check whether the configured backend is compatible with this API
         """
 
+    async def create_backup(self, path: Path) -> Path:
+        """Backup PicPocket data
+
+        Create a backup of PicPocket's backend (locations, tasks, image
+        info, tags).
+
+        Returns:
+            The path to the generated backup file.
+
+        .. note::
+            Unlike `export_data`, this stores the data in a
+            backend-specific way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
+
+        .. note::
+            `create_backup` may not be implemented for all backends.
+
+        .. warning::
+            This file will not contain the images themselves, just the
+            metadata you've created for the image (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The directory to save the backup to. The format of
+                the resulting backup is backend-specific.
+        """
+
     async def import_data(
         self,
         path: Path,
         locations: Optional[list[str] | dict[str, Optional[Path]]] = None,
     ):
-        """Import a PicPocket backup
+        """Import PicPocket data
 
-        Load data (locations, tasks, images, tags) from a PicPocket
+        Load data (locations, tasks, image info, tags) from a PicPocket
         backup created using :meth:`.export_data`. This is the
         recommended way to migrate between backends.
 
@@ -162,10 +191,17 @@ class PicPocket(Protocol):
     async def export_data(
         self, path: Path, locations: Optional[list[str | int]] = None
     ):
-        """Create a PicPocket backup
+        """Export PicPocket data
 
-        Export data (locations, tasks, iamges, tags) from PicPocket.
+        Export data (locations, tasks, image info, tags) from PicPocket.
         This is the recommended way to migrate between backends.
+
+        .. note::
+            Unlike `create_backup`, this stores the data in a
+            backend-agnostic way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
 
         .. warning::
             This file will not contain the images themselves, just the
@@ -173,7 +209,7 @@ class PicPocket(Protocol):
             alt text, etc.).
 
         Args:
-            path: Where to save teh JSON file to store data to.
+            path: Where to save the JSON file to store data to.
             locations: Only export images and task related to this
                 location.
         """

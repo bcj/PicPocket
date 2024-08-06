@@ -34,7 +34,7 @@ class Version(NamedTuple):
         return version
 
 
-VERSION = Version(0, 1, 0)
+VERSION = Version(0, 2, 0, "dev")
 POSTGRES_VERSION = Version(0, 1, 0)
 SQLITE_VERSION = Version(0, 1, 0)
 WEB_VERSION = Version(0, 1, 0)

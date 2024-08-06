@@ -165,6 +165,9 @@ class DbApi(PicPocket, ABC):
         do that on every single cursor creation.
         """
 
+    async def create_backup(self, path: Path) -> Path:
+        raise NotImplementedError("Backups unsupported for this backend")
+
     async def import_data(
         self,
         path: Path,

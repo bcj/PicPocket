@@ -118,7 +118,7 @@ def test_build_meta(create_parser):
     # from prog.
     prelude = len(parser.prog) + 1
     commands = {subparser.prog[prelude:] for subparser in build_meta(subparsers)}
-    assert commands == {"web", "import", "export"}
+    assert commands == {"web", "backup", "import", "export"}
 
     # web
     args = parser.parse_args(["web", "--local-actions"])
@@ -147,6 +147,16 @@ def test_build_meta(create_parser):
         local_actions=False,
         suggestions=3,
         suggestion_lookback=4,
+    )
+
+    # backup
+    args = parser.parse_args(["backup"])
+    assert args == Namespace(command="backup", path=Path.cwd())
+
+    args = parser.parse_args(["backup", "path/to/file.sqlite"])
+    assert args == Namespace(
+        command="backup",
+        path=Path("path") / "to" / "file.sqlite",
     )
 
     # import
@@ -1490,34 +1500,34 @@ async def test_run_meta(load_api, tmp_path, image_files):
         await picpocket.import_location(id)
         await picpocket.unmount(id)
 
-        api_backup = tmp_path / "api.json"
-        cli_backup = tmp_path / "cli.json"
+        api_export = tmp_path / "api.json"
+        cli_export = tmp_path / "cli.json"
 
         # only some locations
-        await picpocket.export_data(api_backup, locations=["main", "portable"])
+        await picpocket.export_data(api_export, locations=["main", "portable"])
         await run_meta(
             picpocket,
             Namespace(
                 command="export",
-                path=cli_backup,
+                path=cli_export,
                 locations=["main", "portable"],
             ),
             print=printer.print,
         )
-        compare_json_files(api_backup, cli_backup)
+        compare_json_files(api_export, cli_export)
 
         # full backup
-        await picpocket.export_data(api_backup)
+        await picpocket.export_data(api_export)
         await run_meta(
             picpocket,
             Namespace(
                 command="export",
-                path=cli_backup,
+                path=cli_export,
                 locations=None,
             ),
             print=printer.print,
         )
-        compare_json_files(api_backup, cli_backup)
+        compare_json_files(api_export, cli_export)
 
     # partial import
     async with load_api() as picpocket:
@@ -1525,7 +1535,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
             picpocket,
             Namespace(
                 command="import",
-                path=cli_backup,
+                path=cli_export,
                 locations=["main"],
             ),
             print=printer.print,
@@ -1543,7 +1553,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
             picpocket,
             Namespace(
                 command="import",
-                path=cli_backup,
+                path=cli_export,
                 locations=None,
             ),
             print=printer.print,
@@ -1557,7 +1567,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
             picpocket,
             Namespace(
                 command="import",
-                path=cli_backup,
+                path=cli_export,
                 locations=[["portable", str(portable)]],
             ),
             print=printer.print,
@@ -1565,7 +1575,23 @@ async def test_run_meta(load_api, tmp_path, image_files):
         assert len(await picpocket.list_locations()) == 1
         assert await picpocket.count_images() == 2
 
-        # unknown command
+    # backup
+    async with load_api() as picpocket:
+        # TODO: this will break if/when we switch Postgres to directory backups
+        cli_backup = tmp_path / "cli.backup"
+        api_backup = tmp_path / "api.backup"
+
+        await run_meta(
+            picpocket,
+            Namespace(command="backup", path=cli_backup),
+            print=printer.print,
+        )
+        await picpocket.create_backup(api_backup)
+
+        assert api_backup.read_bytes() == cli_backup.read_bytes()
+
+    # unknown command
+    async with load_api() as picpocket:
         with pytest.raises(NotImplementedError):
             await run_meta(
                 picpocket,

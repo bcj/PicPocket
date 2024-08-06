@@ -311,7 +311,7 @@ def _wipe(connection_info):
         for table in _get_tables():
             # TODO: does psycopg.sql.SQL & .Identifier not work here?
             # in the mean time do a quick check on custom_type
-            re.search(r"^[a-z0-9_]+$", table)
+            assert re.search(r"^[a-z0-9_]+$", table)
 
             cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
 
@@ -319,7 +319,7 @@ def _wipe(connection_info):
         for custom_type in _get_types():
             # TODO: does psycopg.sql.SQL & .Identifier not work here?
             # in the mean time do a quick check on custom_type
-            re.search(r"^[a-z0-9_]+$", custom_type)
+            assert re.search(r"^[a-z0-9_]+$", custom_type)
 
             cursor.execute(f"DROP TYPE IF EXISTS {custom_type} CASCADE;")
 

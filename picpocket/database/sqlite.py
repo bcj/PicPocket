@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from shutil import copy2
 from typing import Optional
 
 import aiosqlite
@@ -255,6 +257,55 @@ class Sqlite(DbApi):
             version = Version(*row)
 
             return version == SCHEMA_VERSION
+
+    async def create_backup(self, path: Path) -> Path:
+        """Backup PicPocket data
+
+        Create a backup of PicPocket's backend (locations, tasks, image
+        info, tags).
+
+        Returns:
+            The path to the generated backup file.
+
+        .. note::
+            Unlike `export_data`, this stores the data in a
+            backend-specific way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
+
+        .. note::
+            `create_backup` may not be implemented for all backends.
+
+        .. warning::
+            This file will not contain the images themselves, just the
+            metadata you've created for the image (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The directory to save the backup to. The format of
+                the resulting backup is backend-specific. With the
+                (default) SQLite backend, the backup will be a copy of
+                the existing DB file. If the supplied path is an
+                existing directory, it will be saved to a file with the
+                name picpocket-<VERSION>-<DATE>.sqlite
+        """
+        db_file = Path(self.configuration.contents["backend"]["connection"]["path"])
+        if not db_file.is_absolute():
+            db_file = self.configuration.directory / db_file
+
+        if path.is_dir() or not path.suffix:
+            version = await self.get_version()
+            path = path / (
+                f"picpocket-{version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sqlite"
+            )
+
+        path.parent.mkdir(exist_ok=True, parents=True)
+
+        LOGGER.info("Copying DB to %s", path)
+        copy2(db_file, path)
+
+        return path
 
 
 __all__ = (

@@ -1,4 +1,7 @@
+import re
+import shutil
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -262,6 +265,111 @@ async def test_initialize(tmp_path):
     # can't reinitialize
     with pytest.raises(ValueError):
         await sqlite.initialize()
+
+
+@pytest.mark.asyncio
+async def test_create_backup(load_api, tmp_path, image_files):
+    from picpocket.version import SQLITE_VERSION
+
+    async with load_api(backend="sqlite") as api:
+        await api.add_tag("dogs", "dogs are cool")
+        await api.add_tag("tag", "a tag")
+        await api.add_tag("tag/that/is/nested", "another tag")
+
+        main = tmp_path / "main"
+        main.mkdir()
+        shutil.copy2(image_files[0], main / "a.jpg")
+        shutil.copy2(image_files[1], main / "b.jpg")
+
+        portable = tmp_path / "portable"
+        portable.mkdir()
+        (portable / "subdirectory").mkdir()
+        shutil.copy2(image_files[0], portable / "a.jpg")
+        shutil.copy2(image_files[1], portable / "subdirectory" / "b.jpg")
+
+        main_id = await api.add_location(
+            "main",
+            main,
+            description="main storage",
+            source=True,
+            destination=True,
+            removable=False,
+        )
+        await api.import_location(main_id, creator="bcj", tags=["tag/that", "other"])
+        ajpg = await api.find_image(main / "a.jpg")
+        await api.edit_image(
+            ajpg.id,
+            caption="a description",
+            title="Title",
+            alt="alt text",
+            rating=5,
+        )
+
+        await api.add_location("portable", destination=True, removable=True)
+        await api.mount("portable", portable)
+        await api.import_location("portable")
+        await api.unmount("portable")
+
+        await api.add_task(
+            "my task",
+            description="a task description",
+            source="portable",
+            destination="main",
+            source_path="subdirectory/{year}/{month}",
+            destination_format="from_portable/{file}",
+            tags=["a", "b/c"],
+        )
+        await api.add_task(
+            "reversed",
+            source="main",
+            destination="portable",
+            source_path="directory",
+            destination_format="from_main/{file}",
+        )
+        await api.add_task(
+            "portable task",
+            description="a task that only touches portable",
+            source="portable",
+            destination="portable",
+            creator="bcj",
+            file_formats=["bmp"],
+        )
+
+        filename = tmp_path / "backup.sqlite"
+        directory = tmp_path / "subdirectory"
+
+        path_1 = await api.create_backup(filename)
+        assert path_1 == filename
+        assert path_1.exists()
+
+        before = datetime.now().replace(microsecond=0)
+        path_2 = await api.create_backup(directory)
+        after = datetime.now()
+        assert path_2.parent == directory
+        assert path_2.exists()
+        match = re.search(
+            (
+                r"^picpocket-(\d+\.\d+\.\d+(?:\.dev)?)"
+                r"-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\.sqlite$"
+            ),
+            path_2.name,
+        )
+        assert match
+        assert match.group(1) == str(SQLITE_VERSION)
+        date = datetime.strptime(match.group(2), "%Y-%m-%d-%H-%M-%S")
+        assert before <= date <= after
+
+        assert path_1.read_bytes() == path_2.read_bytes()
+
+        # We probably don't need to be exhaustive here since we know we
+        # are just copying the database directly
+        with sqlite3.connect(path_1) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM tags").fetchone() == (5,)
+            assert connection.execute("SELECT COUNT(*) FROM locations").fetchone() == (
+                2,
+            )
+            assert connection.execute("SELECT COUNT(*) FROM images").fetchone() == (4,)
+            assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (3,)
 
 
 @pytest.mark.asyncio

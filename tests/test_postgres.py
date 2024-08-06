@@ -1,6 +1,9 @@
 import os
+import re
 import shutil
+from datetime import datetime
 from pathlib import Path
+from subprocess import check_call
 
 import pytest
 
@@ -388,6 +391,176 @@ async def test_initialize(pg_credentials, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_create_backup(pg_credentials, load_api, tmp_path, image_files):
+    import psycopg
+
+    from picpocket.database.postgres import _get_tables
+    from picpocket.version import POSTGRES_VERSION
+    from tests.conftest import _wipe
+
+    async with load_api(backend="postgres") as api:
+        await api.add_tag("dogs", "dogs are cool")
+        await api.add_tag("tag", "a tag")
+        await api.add_tag("tag/that/is/nested", "another tag")
+
+        main = tmp_path / "main"
+        main.mkdir()
+        shutil.copy2(image_files[0], main / "a.jpg")
+        shutil.copy2(image_files[1], main / "b.jpg")
+
+        portable = tmp_path / "portable"
+        portable.mkdir()
+        (portable / "subdirectory").mkdir()
+        shutil.copy2(image_files[0], portable / "a.jpg")
+        shutil.copy2(image_files[1], portable / "subdirectory" / "b.jpg")
+
+        main_id = await api.add_location(
+            "main",
+            main,
+            description="main storage",
+            source=True,
+            destination=True,
+            removable=False,
+        )
+        await api.import_location(main_id, creator="bcj", tags=["tag/that", "other"])
+        ajpg = await api.find_image(main / "a.jpg")
+        await api.edit_image(
+            ajpg.id,
+            caption="a description",
+            title="Title",
+            alt="alt text",
+            rating=5,
+        )
+
+        portable_id = await api.add_location(
+            "portable", destination=True, removable=True
+        )
+        await api.mount("portable", portable)
+        await api.import_location("portable")
+        await api.unmount("portable")
+
+        await api.add_task(
+            "my task",
+            description="a task description",
+            source="portable",
+            destination="main",
+            source_path="subdirectory/{year}/{month}",
+            destination_format="from_portable/{file}",
+            tags=["a", "b/c"],
+        )
+        await api.add_task(
+            "reversed",
+            source="main",
+            destination="portable",
+            source_path="directory",
+            destination_format="from_main/{file}",
+        )
+        await api.add_task(
+            "portable task",
+            description="a task that only touches portable",
+            source="portable",
+            destination="portable",
+            creator="bcj",
+            file_formats=["bmp"],
+        )
+
+        filename = tmp_path / "backup.sql"
+        existing_directory = tmp_path
+
+        path_1 = await api.create_backup(filename)
+        assert path_1 == filename
+        assert path_1.is_file()
+
+        before = datetime.now().replace(microsecond=0)
+        path_2 = await api.create_backup(existing_directory)
+        after = datetime.now()
+        assert path_2.parent == existing_directory
+        assert path_2.is_file()
+        match = re.search(
+            (
+                r"^picpocket-(\d+\.\d+\.\d+(?:\.dev)?)"
+                r"-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}).sql$"
+            ),
+            path_2.name,
+        )
+        assert match
+        assert match.group(1) == str(POSTGRES_VERSION)
+        date = datetime.strptime(match.group(2), "%Y-%m-%d-%H-%M-%S")
+        assert before <= date <= after
+
+        assert path_1.read_text() == path_2.read_text()
+
+        _wipe(api.configuration.contents["backend"]["connection"])
+
+    # make sure DB is actually wiped
+    async with (
+        await psycopg.AsyncConnection.connect(**pg_credentials) as connection,
+        connection.cursor() as cursor,
+    ):
+        await cursor.execute(
+            "SELECT COUNT(tablename) FROM pg_tables WHERE tablename = ANY(%s)",
+            (list(_get_tables()),),
+        )
+        assert await cursor.fetchone() == (0,)
+
+    # TODO: load SQL file instead
+    command = [
+        "psql",
+        "--dbname",
+        pg_credentials["dbname"],
+        "--host",
+        pg_credentials["host"],
+        "--port",
+        str(pg_credentials["port"]),
+        "--username",
+        pg_credentials["user"],
+        "--file",
+        str(path_2),
+    ]
+
+    if pg_credentials["password"]:
+        command.extend(("--password", pg_credentials["password"]))
+    else:
+        command.append("--no-password")
+
+    check_call(command)
+
+    # not exhaustive but probably enough?
+    async with (
+        await psycopg.AsyncConnection.connect(**pg_credentials) as connection,
+        connection.cursor() as cursor,
+    ):
+        await cursor.execute(
+            "SELECT tablename FROM pg_tables WHERE tablename = ANY(%s)",
+            (list(_get_tables()),),
+        )
+        assert {row[0] for row in await cursor.fetchall()} == _get_tables()
+
+        await cursor.execute(
+            "SELECT name, description FROM tags ORDER BY name ASC;",
+        )
+        assert set(await cursor.fetchall()) == {
+            ("//dogs/", "dogs are cool"),
+            ("//other/", None),
+            ("//tag/", "a tag"),
+            ("//tag/that/", None),
+            ("//tag/that/is/nested/", "another tag"),
+        }
+
+        await cursor.execute(
+            """
+            SELECT id, name, description, path, source, destination, removable
+            FROM locations
+            ORDER BY name ASC;
+            """
+        )
+        assert await cursor.fetchall() == [
+            (main_id, "main", "main storage", str(main), True, True, False),
+            (portable_id, "portable", None, None, False, True, True),
+        ]
+
+
+@pytest.mark.asyncio
 async def test_import_images(load_api, tmp_path):
     from picpocket.images import hash_image
 
@@ -411,7 +584,6 @@ async def test_import_images(load_api, tmp_path):
         importer = await api._import_images(location_id, root)
 
         await importer.asend(goose)
-        await importer.asend(root / "birds" / "goose.JPG")
         await importer.asend(dogs)
         await importer.asend(cat)
 
@@ -419,14 +591,14 @@ async def test_import_images(load_api, tmp_path):
         await cursor.execute(
             "SELECT id, hash, name, extension, location, path FROM images ORDER BY id;",
         )
-        await cursor.fetchall() == []
+        assert await cursor.fetchall() == []
 
         await importer.aclose()
 
         await cursor.execute(
             "SELECT hash, name, extension, location, path FROM images ORDER BY id;",
         )
-        await cursor.fetchall() == [
+        assert await cursor.fetchall() == [
             (
                 hash_image(goose),
                 "goose",
@@ -435,7 +607,7 @@ async def test_import_images(load_api, tmp_path):
                 "birds/goose.jpg",
             ),
             (hash_image(dogs), "dogs", "jpg", location_id, "dogs.jpg"),
-            (hash_image(cat), "cat", "jpeg", location_id, "birds/cat.jpg"),
+            (hash_image(cat), "cat", "jpeg", location_id, "cat.JPEG"),
         ]
 
         # batching and returning results
