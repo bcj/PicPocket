@@ -101,7 +101,7 @@ def main(
             runner.run(initialize(args.directory, args.backend, **kwargs))
         else:
             match args.command:
-                case "backup" | "import" | "export" | "web":
+                case "backup" | "restore" | "import" | "export" | "web":
                     function = run_meta
                 case "location":
                     function = run_location
@@ -316,6 +316,11 @@ def build_meta(action) -> list[ArgumentParser]:
         help="Where to save the backup file",
     )
 
+    restorer = action.add_parser(
+        "restore", description="Restor a backup of the PicPocket backend"
+    )
+    restorer.add_argument("path", type=Path, help="The backup to restore")
+
     importer = action.add_parser("import", description="Import a PicPocket backup")
     importer.add_argument("path", type=full_path, help="The backup to import")
     importer_locations_group = importer.add_mutually_exclusive_group()
@@ -335,7 +340,7 @@ def build_meta(action) -> list[ArgumentParser]:
     exporter.add_argument("path", type=full_path, help="where to save the backup")
     exporter.add_argument("--locations", nargs="*", help="Only export these locations")
 
-    return [web, backuper, importer, exporter]
+    return [web, backuper, restorer, importer, exporter]
 
 
 async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
@@ -365,6 +370,12 @@ async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
                 exit(1)
             else:
                 print(f"Backup saved to {backup}")
+        case "restore":
+            try:
+                await picpocket.restore_backup(args.path)
+            except NotImplementedError:
+                print("Restoring backups not supported for the current backend")
+                exit(1)
         case "import":
             if args.locations:
                 if isinstance(args.locations[0], list):

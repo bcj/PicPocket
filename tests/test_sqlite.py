@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+VERSIONS_DIRECTORY = Path(__file__).parent / "versions" / "sqlite"
+
 
 def test_sqlitesql():
     from picpocket.database.sqlite import SqliteSQL
@@ -364,6 +366,54 @@ async def test_create_backup(load_api, tmp_path, image_files):
         # We probably don't need to be exhaustive here since we know we
         # are just copying the database directly
         with sqlite3.connect(path_1) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM tags").fetchone() == (5,)
+            assert connection.execute("SELECT COUNT(*) FROM locations").fetchone() == (
+                2,
+            )
+            assert connection.execute("SELECT COUNT(*) FROM images").fetchone() == (4,)
+            assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (3,)
+
+
+@pytest.mark.asyncio
+async def test_restore_backup(load_api, tmp_path, image_files):
+    from picpocket.version import SQLITE_VERSION
+
+    async with load_api(backend="sqlite") as api:
+        await api.restore_backup(VERSIONS_DIRECTORY / f"{SQLITE_VERSION}.sqlite")
+
+        path = Path(api.configuration.contents["backend"]["connection"]["path"])
+        if not path.is_absolute():
+            path = api.configuration.directory / path
+
+        # We probably don't need to be exhaustive here since we know we
+        # are just copying the database directly
+        with sqlite3.connect(path) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM tags").fetchone() == (5,)
+            assert connection.execute("SELECT COUNT(*) FROM locations").fetchone() == (
+                2,
+            )
+            assert connection.execute("SELECT COUNT(*) FROM images").fetchone() == (4,)
+            assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (3,)
+
+        # we should not attempt to restore a file that doesn't exist
+        with pytest.raises(IOError):
+            await api.restore_backup(tmp_path / "fake.file")
+
+        # We probably don't need to be exhaustive here since we know we
+        # are just copying the database directly
+        with sqlite3.connect(path) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM tags").fetchone() == (5,)
+            assert connection.execute("SELECT COUNT(*) FROM locations").fetchone() == (
+                2,
+            )
+            assert connection.execute("SELECT COUNT(*) FROM images").fetchone() == (4,)
+            assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (3,)
+
+        # shouldn't break the DB on attempting to restore an invalid file
+        with pytest.raises(Exception):
+            await api.restore_backup(Path(__file__))
+
+        with sqlite3.connect(path) as connection:
             assert connection.execute("SELECT COUNT(*) FROM tags").fetchone() == (5,)
             assert connection.execute("SELECT COUNT(*) FROM locations").fetchone() == (
                 2,

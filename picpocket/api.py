@@ -156,6 +156,28 @@ class PicPocket(Protocol):
                 the resulting backup is backend-specific.
         """
 
+    async def restore_backup(self, path: Path):
+        """Restore PicPocket data from a previously created backup
+
+        Restore a backup of PicPocket's backend (locations, tasks, image
+        info, tags). This operation will be destructive.
+
+        .. note::
+            Unlike `import_data`, the backup must have been created from
+            the same backend as the one currently being used.
+
+        .. note::
+            `restore_backup` may not be implemented for all backends.
+
+        .. warning::
+            This backup will not contain the images themselves, just the
+            metadata you've created for the images (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The path to the existing backup file.
+        """
+
     async def import_data(
         self,
         path: Path,

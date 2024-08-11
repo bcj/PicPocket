@@ -7,7 +7,9 @@ from subprocess import check_call
 
 import pytest
 
-TEST_IMAGES = Path(__file__).parent / "images"
+TEST_DIRECTORY = Path(__file__).parent
+VERSIONS_DIRECTORY = TEST_DIRECTORY / "versions" / "postgres"
+TEST_IMAGES = TEST_DIRECTORY / "images"
 IMAGE_FILES = [TEST_IMAGES / "a.bmp", TEST_IMAGES / "b.bmp", TEST_IMAGES / "c.bmp"]
 
 
@@ -557,6 +559,139 @@ async def test_create_backup(pg_credentials, load_api, tmp_path, image_files):
         assert await cursor.fetchall() == [
             (main_id, "main", "main storage", str(main), True, True, False),
             (portable_id, "portable", None, None, False, True, True),
+        ]
+
+
+@pytest.mark.asyncio
+async def test_restore_backup(pg_credentials, load_api, tmp_path, image_files):
+    import psycopg
+
+    from picpocket.database.postgres import _get_tables
+    from picpocket.version import POSTGRES_VERSION
+
+    # make sure DB is actually wiped
+    async with (
+        await psycopg.AsyncConnection.connect(**pg_credentials) as connection,
+        connection.cursor() as cursor,
+    ):
+        await cursor.execute(
+            "SELECT COUNT(tablename) FROM pg_tables WHERE tablename = ANY(%s)",
+            (list(_get_tables()),),
+        )
+        assert await cursor.fetchone() == (0,)
+
+    async with load_api(backend="postgres") as api:
+        await api.restore_backup(VERSIONS_DIRECTORY / f"{POSTGRES_VERSION}.sql")
+
+        # not exhaustive but probably enough?
+        async with (
+            await psycopg.AsyncConnection.connect(**pg_credentials) as connection,
+            connection.cursor() as cursor,
+        ):
+            await cursor.execute(
+                "SELECT tablename FROM pg_tables WHERE tablename = ANY(%s)",
+                (list(_get_tables()),),
+            )
+            assert {row[0] for row in await cursor.fetchall()} == _get_tables()
+
+            await cursor.execute(
+                "SELECT name, description FROM tags ORDER BY name ASC;",
+            )
+            assert set(await cursor.fetchall()) == {
+                ("//dogs/", "dogs are cool"),
+                ("//other/", None),
+                ("//tag/", "a tag"),
+                ("//tag/that/", None),
+                ("//tag/that/is/nested/", "another tag"),
+            }
+
+            # skipping path because it's hardcoded to an old temp path
+            await cursor.execute(
+                """
+                SELECT id, name, description, source, destination, removable
+                FROM locations
+                ORDER BY name ASC;
+                """
+            )
+            assert await cursor.fetchall() == [
+                (1, "main", "main storage", True, True, False),
+                (2, "portable", None, False, True, True),
+            ]
+
+        # loading a non-existent file shouldn't break things
+        with pytest.raises(IOError):
+            await api.restore_backup(tmp_path / "fake.file")
+
+        async with (
+            await psycopg.AsyncConnection.connect(**pg_credentials) as connection,
+            connection.cursor() as cursor,
+        ):
+            await cursor.execute(
+                "SELECT tablename FROM pg_tables WHERE tablename = ANY(%s)",
+                (list(_get_tables()),),
+            )
+            assert {row[0] for row in await cursor.fetchall()} == _get_tables()
+
+            await cursor.execute(
+                "SELECT name, description FROM tags ORDER BY name ASC;",
+            )
+            assert set(await cursor.fetchall()) == {
+                ("//dogs/", "dogs are cool"),
+                ("//other/", None),
+                ("//tag/", "a tag"),
+                ("//tag/that/", None),
+                ("//tag/that/is/nested/", "another tag"),
+            }
+
+            # skipping path because it's hardcoded to an old temp path
+            await cursor.execute(
+                """
+                SELECT id, name, description, source, destination, removable
+                FROM locations
+                ORDER BY name ASC;
+                """
+            )
+            assert await cursor.fetchall() == [
+                (1, "main", "main storage", True, True, False),
+                (2, "portable", None, False, True, True),
+            ]
+
+        # loading an invalid file shouldn't break things
+        with pytest.raises(Exception):
+            await api.restore_backup(Path(__file__))
+
+    async with (
+        await psycopg.AsyncConnection.connect(**pg_credentials) as connection,
+        connection.cursor() as cursor,
+    ):
+        await cursor.execute(
+            "SELECT tablename FROM pg_tables WHERE tablename = ANY(%s)",
+            (list(_get_tables()),),
+        )
+        assert {row[0] for row in await cursor.fetchall()} == _get_tables()
+
+        await cursor.execute(
+            "SELECT name, description FROM tags ORDER BY name ASC;",
+        )
+        assert set(await cursor.fetchall()) == {
+            ("//dogs/", "dogs are cool"),
+            ("//other/", None),
+            ("//tag/", "a tag"),
+            ("//tag/that/", None),
+            ("//tag/that/is/nested/", "another tag"),
+        }
+
+        # skipping path because it's hardcoded to an old temp path
+        await cursor.execute(
+            """
+            SELECT id, name, description, source, destination, removable
+            FROM locations
+            ORDER BY name ASC;
+            """
+        )
+        assert await cursor.fetchall() == [
+            (1, "main", "main storage", True, True, False),
+            (2, "portable", None, False, True, True),
         ]
 
 

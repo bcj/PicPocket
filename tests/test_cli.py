@@ -118,7 +118,7 @@ def test_build_meta(create_parser):
     # from prog.
     prelude = len(parser.prog) + 1
     commands = {subparser.prog[prelude:] for subparser in build_meta(subparsers)}
-    assert commands == {"web", "backup", "import", "export"}
+    assert commands == {"web", "backup", "restore", "import", "export"}
 
     # web
     args = parser.parse_args(["web", "--local-actions"])
@@ -156,6 +156,13 @@ def test_build_meta(create_parser):
     args = parser.parse_args(["backup", "path/to/file.sqlite"])
     assert args == Namespace(
         command="backup",
+        path=Path("path") / "to" / "file.sqlite",
+    )
+
+    # restore
+    args = parser.parse_args(["restore", "path/to/file.sqlite"])
+    assert args == Namespace(
+        command="restore",
         path=Path("path") / "to" / "file.sqlite",
     )
 
@@ -1577,6 +1584,17 @@ async def test_run_meta(load_api, tmp_path, image_files):
 
     # backup
     async with load_api() as picpocket:
+        id = await picpocket.add_location("main", main, destination=True)
+        await picpocket.import_location(id)
+
+        id = await picpocket.add_location("other", other, destination=True)
+        await picpocket.import_location(id)
+
+        id = await picpocket.add_location("portable", destination=True)
+        await picpocket.mount(id, portable)
+        await picpocket.import_location(id)
+        await picpocket.unmount(id)
+
         # TODO: this will break if/when we switch Postgres to directory backups
         cli_backup = tmp_path / "cli.backup"
         api_backup = tmp_path / "api.backup"
@@ -1589,6 +1607,17 @@ async def test_run_meta(load_api, tmp_path, image_files):
         await picpocket.create_backup(api_backup)
 
         assert api_backup.read_bytes() == cli_backup.read_bytes()
+
+        main_location = await picpocket.get_location("main")
+        await picpocket.remove_location("main", force=True)
+
+        await run_meta(
+            picpocket,
+            Namespace(command="restore", path=cli_backup),
+            print=printer.print,
+        )
+
+        assert main_location == await picpocket.get_location("main")
 
     # unknown command
     async with load_api() as picpocket:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -306,6 +307,26 @@ class Sqlite(DbApi):
         copy2(db_file, path)
 
         return path
+
+    async def restore_backup(self, path: Path):
+        if not path.is_file():
+            logging.error("Attempting to restore non-existent file: %s", path)
+            raise IOError(f"Missing file: {path}")
+
+        try:
+            connection = sqlite3.connect(path)
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM version ORDER BY id DESC LIMIT 1;")
+            cursor.fetchone()
+        except Exception:
+            logging.exception("Attempting to load the database failed. Aborting")
+            raise
+
+        db_file = Path(self.configuration.contents["backend"]["connection"]["path"])
+        if not db_file.is_absolute():
+            db_file = self.configuration.directory / db_file
+
+        copy2(path, db_file)
 
 
 __all__ = (

@@ -325,6 +325,36 @@ class Postgres(DbApi):
 
         return path
 
+    async def restore_backup(self, path: Path):
+        if not path.is_file():
+            logging.error("Attempting to restore non-existent file: %s", path)
+            raise IOError(f"Missing file: {path}")
+
+        connection_info = self.configuration.contents["backend"]["connection"]
+
+        command = [
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "--file",
+            str(path),
+            "--dbname",
+            connection_info["dbname"],
+            "--host",
+            connection_info["host"],
+            "--port",
+            str(connection_info["port"]),
+            "--username",
+            connection_info["user"],
+        ]
+
+        if connection_info["password"]:
+            command.extend(("--password", connection_info["password"]))
+        else:
+            command.append("--no-password")
+
+        check_call(command)
+
 
 def _get_types() -> set[str]:
     """Get the names of the types that exist in the types file.
