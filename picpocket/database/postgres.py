@@ -12,7 +12,7 @@ from typing import Any, Iterable, Optional
 
 import psycopg
 import psycopg.sql
-from psycopg import AsyncConnection
+from psycopg import AsyncClientCursor, AsyncConnection
 from psycopg.errors import UndefinedTable
 
 from picpocket.api import CredentialType
@@ -199,13 +199,9 @@ class Postgres(DbApi):
                 )
 
             LOGGER.debug("Creating types")
-            await cursor.execute(TYPES_FILE.read_text())
+            await self._load_schema(cursor, TYPES_FILE)
             LOGGER.debug("Creating tables")
-            await cursor.execute(SCHEMA_FILE.read_text())
-
-            await cursor.execute(
-                "INSERT INTO VERSION (version) VALUES (%s);", (SCHEMA_VERSION,)
-            )
+            await self._load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
 
             LOGGER.debug("committing database")
             await connection.commit()
@@ -260,6 +256,19 @@ class Postgres(DbApi):
             version = Version(*rows[0])
 
             return version == SCHEMA_VERSION
+
+    async def _load_schema(
+        self,
+        cursor: AsyncClientCursor,
+        path: Path,
+        version: Optional[Version] = None,
+    ):
+        await cursor.execute(path.read_text())
+
+        if version:
+            await cursor.execute(
+                "INSERT INTO VERSION (version) VALUES (%s);", (version,)
+            )
 
     async def create_backup(self, path: Path) -> Path:
         """Backup PicPocket data

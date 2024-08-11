@@ -34,7 +34,7 @@ from picpocket.errors import (
 from picpocket.images import hash_image, image_info
 from picpocket.internal_use import NotSupplied
 from picpocket.tasks import PathPart, load_path
-from picpocket.version import VERSION
+from picpocket.version import VERSION, Version
 
 EXPIRATION = timedelta(days=1)
 

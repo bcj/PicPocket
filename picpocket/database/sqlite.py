@@ -12,7 +12,7 @@ from shutil import copy2
 from typing import Optional
 
 import aiosqlite
-from aiosqlite import Connection
+from aiosqlite import Connection, Cursor
 
 from picpocket.api import CredentialType
 from picpocket.configuration import Configuration
@@ -196,19 +196,15 @@ class Sqlite(DbApi):
 
     async def initialize(self):
         LOGGER.debug("Creating tables")
+
         async with await self.connect(should_exist=False) as connection:
-            cursor = await connection.executescript(SCHEMA_FILE.read_text())
-            await cursor.execute(
-                """
-                INSERT INTO VERSION (major, minor, patch, label)
-                VALUES (?, ?, ?, ?);
-                """,
-                SCHEMA_VERSION,
-            )
+            cursor = await connection.cursor()
+
+            await self._load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
 
             LOGGER.debug("committing database")
             await connection.commit()
-            await cursor.close()
+            cursor.close()
 
     def get_api_version(self) -> Version:
         return SCHEMA_VERSION
@@ -258,6 +254,23 @@ class Sqlite(DbApi):
             version = Version(*row)
 
             return version == SCHEMA_VERSION
+
+    async def _load_schema(
+        self,
+        cursor: Cursor,
+        path: Path,
+        version: Optional[Version] = None,
+    ):
+        await cursor.executescript(path.read_text())
+
+        if version:
+            await cursor.execute(
+                """
+                INSERT INTO VERSION (major, minor, patch, label)
+                VALUES (?, ?, ?, ?);
+                """,
+                SCHEMA_VERSION,
+            )
 
     async def create_backup(self, path: Path) -> Path:
         """Backup PicPocket data
