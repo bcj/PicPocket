@@ -77,7 +77,7 @@ async def initialize(
             "minor": VERSION.minor,
             "patch": VERSION.patch,
         },
-        "backend": {"type": api_type.BACKEND_NAME},
+        "backend": {"type": backend},
         "files": {"formats": sorted(IMAGE_FORMATS)},
         "web": {
             # TODO: rotate this automatically ever x days

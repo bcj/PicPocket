@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+VERSIONS_DIRECTORY = Path(__file__).parent / "versions"
+
 
 class Printer:
     def __init__(self):
@@ -118,7 +120,7 @@ def test_build_meta(create_parser):
     # from prog.
     prelude = len(parser.prog) + 1
     commands = {subparser.prog[prelude:] for subparser in build_meta(subparsers)}
-    assert commands == {"web", "backup", "restore", "import", "export"}
+    assert commands == {"web", "upgrade", "backup", "restore", "import", "export"}
 
     # web
     args = parser.parse_args(["web", "--local-actions"])
@@ -148,6 +150,19 @@ def test_build_meta(create_parser):
         suggestions=3,
         suggestion_lookback=4,
     )
+
+    # upgrade
+    args = parser.parse_args(["upgrade"])
+    assert args == Namespace(command="upgrade", path=Path.cwd())
+
+    args = parser.parse_args(["upgrade", "--path", "path/to/file.sqlite"])
+    assert args == Namespace(command="upgrade", path=Path("path/to/file.sqlite"))
+
+    args = parser.parse_args(["upgrade", "--no-backup"])
+    assert args == Namespace(command="upgrade", path=None)
+
+    with pytest.raises(BaseException):
+        parser.parse_args(["upgrade", "--path", "path/to/file.sqlite", "--no-backup"])
 
     # backup
     args = parser.parse_args(["backup"])
@@ -1582,7 +1597,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
         assert len(await picpocket.list_locations()) == 1
         assert await picpocket.count_images() == 2
 
-    # backup
+    # backup/restore
     async with load_api() as picpocket:
         id = await picpocket.add_location("main", main, destination=True)
         await picpocket.import_location(id)
@@ -1618,6 +1633,24 @@ async def test_run_meta(load_api, tmp_path, image_files):
         )
 
         assert main_location == await picpocket.get_location("main")
+
+    # upgrade
+    backend = os.environ.get("PICPOCKET_BACKEND", "sqlite")
+
+    match backend:
+        case "sqlite":
+            starting_backup = VERSIONS_DIRECTORY / backend / "0.1.0.sqlite"
+            backup_file = tmp_path / "backup.sqlite"
+        case "postgres":
+            starting_backup = VERSIONS_DIRECTORY / backend / "0.1.0.sql"
+            backup_file = tmp_path / "backup.sql"
+
+    async with load_api(backend=backend) as picpocket:
+        await picpocket.restore_backup(starting_backup)
+        await run_meta(picpocket, Namespace(command="upgrade", path=backup_file))
+
+        assert starting_backup.read_bytes() == backup_file.read_bytes()
+        assert await picpocket.compatible_backend()
 
     # unknown command
     async with load_api() as picpocket:

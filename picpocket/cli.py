@@ -101,7 +101,7 @@ def main(
             runner.run(initialize(args.directory, args.backend, **kwargs))
         else:
             match args.command:
-                case "backup" | "restore" | "import" | "export" | "web":
+                case "upgrade" | "backup" | "restore" | "import" | "export" | "web":
                     function = run_meta
                 case "location":
                     function = run_location
@@ -307,6 +307,22 @@ def build_meta(action) -> list[ArgumentParser]:
         ),
     )
 
+    upgrader = action.add_parser("upgrade", description="Upgrade the PicPocket backend")
+    upgrader_location_group = upgrader.add_mutually_exclusive_group()
+    upgrader_location_group.add_argument(
+        "--path",
+        default=Path.cwd(),
+        type=Path,
+        help="Where to save the backup file",
+    )
+    upgrader_location_group.add_argument(
+        "--no-backup",
+        dest="path",
+        action="store_const",
+        const=None,
+        help="Don't back up the database before upgrading",
+    )
+
     backuper = action.add_parser("backup", description="Back up the PicPocket backend")
     backuper.add_argument(
         "path",
@@ -340,7 +356,7 @@ def build_meta(action) -> list[ArgumentParser]:
     exporter.add_argument("path", type=full_path, help="where to save the backup")
     exporter.add_argument("--locations", nargs="*", help="Only export these locations")
 
-    return [web, backuper, restorer, importer, exporter]
+    return [web, upgrader, backuper, restorer, importer, exporter]
 
 
 async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
@@ -362,6 +378,17 @@ async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
                 )
             except KeyboardInterrupt:
                 print("shutting down")
+        case "upgrade":
+            try:
+                backup = await picpocket.upgrade_backend(path=args.path)
+            except Exception:
+                print("Upgrading database failed")
+                raise
+            else:
+                print("Upgrade complete")
+
+                if backup:
+                    print(f"Backup of previous version saved to: {backup}")
         case "backup":
             try:
                 backup = await picpocket.create_backup(args.path)

@@ -1,0 +1,1 @@
+INSERT INTO version (version) VALUES (ROW(0, 2, 0, 'dev'));

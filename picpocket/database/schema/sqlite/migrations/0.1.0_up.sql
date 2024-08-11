@@ -1,0 +1,1 @@
+INSERT INTO version (major, minor, patch, label) VALUES (0, 2, 0, "dev");

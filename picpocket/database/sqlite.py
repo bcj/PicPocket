@@ -24,6 +24,7 @@ from picpocket.version import Version
 LOGGER = logging.getLogger("picpocket.sqlite")
 
 SCHEMA_DIRECTORY = Path(__file__).absolute().parent / "schema" / "sqlite"
+MIGRATION_DIRECTORY = SCHEMA_DIRECTORY / "migrations"
 SCHEMA_FILE = SCHEMA_DIRECTORY / "schema.sql"
 
 DEFAULT_FILENAME = "picpocket.sqlite3"
@@ -55,7 +56,6 @@ class SqliteSQL(SQL):
 class Sqlite(DbApi):
     """DbApi implementation for SQLite"""
 
-    BACKEND_NAME = "sqlite"
     CREDENTIAL_TYPE = CredentialType.NONE
 
     TASKS_TABLE = {
@@ -112,6 +112,14 @@ class Sqlite(DbApi):
         self._configuration = configuration
         self._mounts: dict[int, Path] = {}
         self._sql = SqliteSQL()
+
+    @property
+    def name(self) -> str:
+        return "sqlite"
+
+    @property
+    def migration_directory(self) -> Path:
+        return MIGRATION_DIRECTORY
 
     @property
     def configuration(self) -> Configuration:
@@ -177,7 +185,7 @@ class Sqlite(DbApi):
 
     async def connect(self, should_exist: Optional[bool] = True) -> Connection:
         backend_info = self.configuration.contents["backend"]
-        if backend_info["type"] != self.BACKEND_NAME:
+        if backend_info["type"] != self.name:
             raise ValueError(f"Wrong backend! {backend_info['type']}")
 
         pathstr = backend_info.get("connection", {})["path"]
@@ -197,65 +205,40 @@ class Sqlite(DbApi):
     async def initialize(self):
         LOGGER.debug("Creating tables")
 
-        async with await self.connect(should_exist=False) as connection:
-            cursor = await connection.cursor()
-
-            await self._load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
+        async with (
+            await self.connect(should_exist=False) as connection,
+            self.cursor(connection, commit=True) as cursor,
+        ):
+            await self.load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
 
             LOGGER.debug("committing database")
-            await connection.commit()
-            cursor.close()
 
-    def get_api_version(self) -> Version:
+    def backend_api_version(self) -> Version:
         return SCHEMA_VERSION
 
-    async def get_version(self) -> Version:
+    async def backend_schema_version(self) -> Version:
         async with (
             await self.connect() as connection,
             self.cursor(connection) as cursor,
         ):
-            await cursor.execute(
-                """
-                SELECT major, minor, patch, label
-                FROM version
-                ORDER BY id DESC LIMIT 1;
-                """
-            )
-            row = await cursor.fetchone()
+            return await self._backend_schema_version(cursor)
 
-            if not row:
-                raise ValueError("Unknown database version")
+    async def _backend_schema_version(self, cursor: Cursor) -> Version:
+        await cursor.execute(
+            """
+            SELECT major, minor, patch, label
+            FROM version
+            ORDER BY id DESC LIMIT 1;
+            """
+        )
+        row = await cursor.fetchone()
 
-            return Version(*row)
+        if not row:
+            raise ValueError("Unknown database version")
 
-    async def matching_version(self) -> bool:
-        async with (
-            await self.connect() as connection,
-            connection.cursor() as cursor,
-        ):
-            try:
-                await cursor.execute(
-                    """
-                    SELECT major, minor, patch, label
-                    FROM version
-                    ORDER BY id DESC LIMIT 1;
-                    """
-                )
-                row = await cursor.fetchone()
-            except Exception:
-                logging.exception("Checking version failed")
-                await connection.rollback()
-                return False
+        return Version(*row)
 
-            if not row:
-                LOGGER.error("Database doesn't contain version info")
-                return False
-
-            version = Version(*row)
-
-            return version == SCHEMA_VERSION
-
-    async def _load_schema(
+    async def load_schema(
         self,
         cursor: Cursor,
         path: Path,
@@ -309,9 +292,12 @@ class Sqlite(DbApi):
             db_file = self.configuration.directory / db_file
 
         if path.is_dir() or not path.suffix:
-            version = await self.get_version()
+            api_version = self.api_version()
+            schema_version = await self.backend_schema_version()
+
             path = path / (
-                f"picpocket-{version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sqlite"
+                f"picpocket-{api_version}-"
+                f"{schema_version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sqlite"
             )
 
         path.parent.mkdir(exist_ok=True, parents=True)

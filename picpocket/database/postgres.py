@@ -13,7 +13,6 @@ from typing import Any, Iterable, Optional
 import psycopg
 import psycopg.sql
 from psycopg import AsyncClientCursor, AsyncConnection
-from psycopg.errors import UndefinedTable
 
 from picpocket.api import CredentialType
 from picpocket.configuration import Configuration
@@ -25,6 +24,7 @@ from picpocket.version import Version
 LOGGER = logging.getLogger("picpocket.postgres")
 
 SCHEMA_DIRECTORY = Path(__file__).absolute().parent / "schema" / "postgres"
+MIGRATION_DIRECTORY = SCHEMA_DIRECTORY / "migrations"
 TYPES_FILE = SCHEMA_DIRECTORY / "types.sql"
 SCHEMA_FILE = SCHEMA_DIRECTORY / "schema.sql"
 
@@ -75,7 +75,6 @@ class PostgreSQL(SQL):
 class Postgres(DbApi):
     """DbApi implementation for PostgreSQL"""
 
-    BACKEND_NAME = "postgres"
     CREDENTIAL_TYPE = CredentialType.PASSWORD
     TEXT_COMPARATORS = {
         Comparator.EQUALS,
@@ -94,6 +93,14 @@ class Postgres(DbApi):
         self._configuration = configuration
         self._mounts: dict[int, Path] = {}
         self._sql = PostgreSQL()
+
+    @property
+    def name(self) -> str:
+        return "postgres"
+
+    @property
+    def migration_directory(self) -> Path:
+        return MIGRATION_DIRECTORY
 
     @property
     def configuration(self) -> Configuration:
@@ -167,7 +174,7 @@ class Postgres(DbApi):
 
     async def connect(self) -> AsyncConnection:
         backend_info = self.configuration.contents["backend"]
-        if backend_info["type"] != self.BACKEND_NAME:
+        if backend_info["type"] != self.name:
             raise ValueError(f"Wrong backend! {backend_info['type']}")
 
         info = backend_info["connection"]
@@ -180,7 +187,7 @@ class Postgres(DbApi):
     async def initialize(self):
         async with (
             await self.connect() as connection,
-            psycopg.AsyncClientCursor(connection) as cursor,
+            self.cursor(connection, commit=True) as cursor,
         ):
             LOGGER.debug("confirming tables don't already exist")
             existing = set()
@@ -199,65 +206,39 @@ class Postgres(DbApi):
                 )
 
             LOGGER.debug("Creating types")
-            await self._load_schema(cursor, TYPES_FILE)
+            await self.load_schema(cursor, TYPES_FILE)
             LOGGER.debug("Creating tables")
-            await self._load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
+            await self.load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
 
             LOGGER.debug("committing database")
-            await connection.commit()
 
-    def get_api_version(self) -> Version:
+    def backend_api_version(self) -> Version:
         return SCHEMA_VERSION
 
-    async def get_version(self) -> Version:
+    async def backend_schema_version(self) -> Version:
         async with (
             await self.connect() as connection,
             self.cursor(connection) as cursor,
         ):
-            await cursor.execute(
-                """
-                SELECT
-                (version).major, (version).minor, (version).patch, (version).label
-                FROM version
-                ORDER BY id DESC LIMIT 1;
-                """
-            )
-            row = await cursor.fetchone()
+            return await self._backend_schema_version(cursor)
 
-            if not row:
-                raise ValueError("Unknown database version")
+    async def _backend_schema_version(self, cursor: AsyncClientCursor) -> Version:
+        await cursor.execute(
+            """
+            SELECT
+            (version).major, (version).minor, (version).patch, (version).label
+            FROM version
+            ORDER BY id DESC LIMIT 1;
+            """
+        )
+        row = await cursor.fetchone()
 
-            return Version(*row)
+        if not row:
+            raise ValueError("Unknown database version")
 
-    # TODO (1.0) actually check version on load
-    async def matching_version(self) -> bool:
-        async with (
-            await self.connect() as connection,
-            self.cursor(connection) as cursor,
-        ):
-            try:
-                await cursor.execute(
-                    """
-                    SELECT
-                    (version).major, (version).minor, (version).patch, (version).label
-                    FROM version
-                    ORDER BY id DESC LIMIT 1;
-                    """
-                )
-                rows = await cursor.fetchall()
-            except UndefinedTable:
-                LOGGER.exception("version table doesn't exist")
-                return False
+        return Version(*row)
 
-            if not len(rows):
-                LOGGER.error("Database doesn't contain version info")
-                return False
-
-            version = Version(*rows[0])
-
-            return version == SCHEMA_VERSION
-
-    async def _load_schema(
+    async def load_schema(
         self,
         cursor: AsyncClientCursor,
         path: Path,
@@ -303,8 +284,13 @@ class Postgres(DbApi):
                 subdirectory with the name picpocket-<VERSION>-<DATE>.sql
         """
         if path.is_dir():
-            version = await self.get_version()
-            path = path / f"picpocket-{version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sql"
+            api_version = self.api_version()
+            schema_version = await self.backend_schema_version()
+
+            path = path / (
+                f"picpocket-{api_version}-"
+                f"{schema_version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sql"
+            )
 
         path.parent.mkdir(exist_ok=True, parents=True)
 

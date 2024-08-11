@@ -105,7 +105,7 @@ class PicPocket(Protocol):
         exception if anything fails.
         """
 
-    def get_api_version(self) -> Version:
+    def api_version(self) -> Version:
         """Get the version of the PicPocket API
 
         This should always match package version.
@@ -114,17 +114,32 @@ class PicPocket(Protocol):
             A Version object.
         """
 
-    async def get_version(self) -> Version:
+    def backend_api_version(self) -> Version:
         """Get the version of the backend API
 
         Returns:
             The version of the backend interface being used.
         """
 
-    async def matching_version(self) -> bool:
-        """Check version compatibility
+    async def compatible_backend(self) -> bool:
+        """Check that the configured backend matches the actual backend
 
-        Check whether the configured backend is compatible with this API
+        Returns:
+            True if the backend type and version match
+        """
+
+    async def upgrade_backend(self, path: Optional[Path]) -> Optional[Path]:
+        """Update the backend version
+
+        Migrate the backend storage to a version supported by the
+        PicPocket API.
+
+        Args:
+            path: A location to save a backup prior to migrating the
+                back end
+
+        Returns:
+            The backup file if one was generated
         """
 
     async def create_backup(self, path: Path) -> Path:

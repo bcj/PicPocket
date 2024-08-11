@@ -181,7 +181,7 @@ async def test_get_tables(pg_credentials):
 
 
 @pytest.mark.asyncio
-async def test_matching_version(load_api):
+async def test_compatible_backend(load_api):
     if os.environ["PICPOCKET_BACKEND"] != "postgres":
         pytest.skip("skipping postgres tests")
 
@@ -192,11 +192,11 @@ async def test_matching_version(load_api):
     from tests.conftest import _wipe
 
     async with load_api(backend="postgres") as api, await api.connect() as connection:
-        assert api.get_api_version() == SCHEMA_VERSION
+        assert api.backend_api_version() == SCHEMA_VERSION
 
         _wipe(api.configuration.contents["backend"]["connection"])
 
-        assert not await api.matching_version()
+        assert not await api.compatible_backend()
 
         # no rows
         async with psycopg.AsyncClientCursor(connection) as cursor:
@@ -204,10 +204,10 @@ async def test_matching_version(load_api):
             await cursor.execute(SCHEMA_FILE.read_text())
             await connection.commit()
 
-        assert not await api.matching_version()
+        assert not await api.compatible_backend()
 
         with pytest.raises(ValueError):
-            await api.get_version()
+            await api.backend_schema_version()
 
         # matching version
         async with connection.cursor() as cursor:
@@ -217,8 +217,8 @@ async def test_matching_version(load_api):
             )
             await connection.commit()
 
-        assert await api.matching_version()
-        assert await api.get_version() == SCHEMA_VERSION
+        assert await api.compatible_backend()
+        assert await api.backend_schema_version() == SCHEMA_VERSION
 
         # version mismatch
         for offset in (-1, 1):
@@ -273,8 +273,8 @@ async def test_matching_version(load_api):
                     )
                     await connection.commit()
 
-                assert not await api.matching_version()
-                assert await api.get_version() == version
+                assert not await api.compatible_backend()
+                assert await api.backend_schema_version() == version
 
         # make sure it's looking at the last
         async with connection.cursor() as cursor:
@@ -284,7 +284,7 @@ async def test_matching_version(load_api):
             )
             await connection.commit()
 
-        assert await api.matching_version()
+        assert await api.compatible_backend()
 
 
 @pytest.mark.asyncio
@@ -393,11 +393,11 @@ async def test_initialize(pg_credentials, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_create_backup(pg_credentials, load_api, tmp_path, image_files):
+async def test_backup_restore(pg_credentials, load_api, tmp_path, image_files):
     import psycopg
 
     from picpocket.database.postgres import _get_tables
-    from picpocket.version import POSTGRES_VERSION
+    from picpocket.version import POSTGRES_VERSION, VERSION
     from tests.conftest import _wipe
 
     async with load_api(backend="postgres") as api:
@@ -466,11 +466,11 @@ async def test_create_backup(pg_credentials, load_api, tmp_path, image_files):
             file_formats=["bmp"],
         )
 
-        filename = tmp_path / "backup.sql"
+        restore_filename = tmp_path / "backup.sql"
         existing_directory = tmp_path
 
-        path_1 = await api.create_backup(filename)
-        assert path_1 == filename
+        path_1 = await api.create_backup(restore_filename)
+        assert path_1 == restore_filename
         assert path_1.is_file()
 
         before = datetime.now().replace(microsecond=0)
@@ -480,14 +480,16 @@ async def test_create_backup(pg_credentials, load_api, tmp_path, image_files):
         assert path_2.is_file()
         match = re.search(
             (
-                r"^picpocket-(\d+\.\d+\.\d+(?:\.dev)?)"
+                r"^picpocket-(\d+\.\d+\.\d+(?:-dev)?)"
+                r"-(\d+\.\d+\.\d+(?:-dev)?)"
                 r"-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}).sql$"
             ),
             path_2.name,
         )
         assert match
-        assert match.group(1) == str(POSTGRES_VERSION)
-        date = datetime.strptime(match.group(2), "%Y-%m-%d-%H-%M-%S")
+        assert match.group(1) == str(VERSION)
+        assert match.group(2) == str(POSTGRES_VERSION)
+        date = datetime.strptime(match.group(3), "%Y-%m-%d-%H-%M-%S")
         assert before <= date <= after
 
         assert path_1.read_text() == path_2.read_text()
@@ -505,7 +507,6 @@ async def test_create_backup(pg_credentials, load_api, tmp_path, image_files):
         )
         assert await cursor.fetchone() == (0,)
 
-    # TODO: load SQL file instead
     command = [
         "psql",
         "--dbname",
@@ -561,13 +562,7 @@ async def test_create_backup(pg_credentials, load_api, tmp_path, image_files):
             (portable_id, "portable", None, None, False, True, True),
         ]
 
-
-@pytest.mark.asyncio
-async def test_restore_backup(pg_credentials, load_api, tmp_path, image_files):
-    import psycopg
-
-    from picpocket.database.postgres import _get_tables
-    from picpocket.version import POSTGRES_VERSION
+    _wipe(pg_credentials)
 
     # make sure DB is actually wiped
     async with (
@@ -581,7 +576,7 @@ async def test_restore_backup(pg_credentials, load_api, tmp_path, image_files):
         assert await cursor.fetchone() == (0,)
 
     async with load_api(backend="postgres") as api:
-        await api.restore_backup(VERSIONS_DIRECTORY / f"{POSTGRES_VERSION}.sql")
+        await api.restore_backup(restore_filename)
 
         # not exhaustive but probably enough?
         async with (
@@ -692,6 +687,75 @@ async def test_restore_backup(pg_credentials, load_api, tmp_path, image_files):
         assert await cursor.fetchall() == [
             (1, "main", "main storage", True, True, False),
             (2, "portable", None, False, True, True),
+        ]
+
+
+# As migrations occur, we should add a test for upgrading from each
+# previous backend. Tests should be specific in testing migrations make
+# expected changes
+@pytest.mark.asyncio
+async def test_upgrade_backend_0_1_0(pg_credentials, load_api, tmp_path, image_files):
+    import psycopg
+
+    from picpocket.database.postgres import SCHEMA_VERSION, _get_tables
+
+    async with load_api(backend="postgres") as api:
+        starting_backup = VERSIONS_DIRECTORY / "0.1.0.sql"
+        await api.restore_backup(starting_backup)
+
+        backup = await api.upgrade_backend(tmp_path)
+
+        assert await api.compatible_backend()
+        assert await api.backend_schema_version() == SCHEMA_VERSION
+
+    assert starting_backup.read_bytes() == backup.read_bytes()
+
+    async with (
+        await psycopg.AsyncConnection.connect(**pg_credentials) as connection,
+        connection.cursor() as cursor,
+    ):
+        await cursor.execute(
+            "SELECT tablename FROM pg_tables WHERE tablename = ANY(%s)",
+            (list(_get_tables()),),
+        )
+        assert {row[0] for row in await cursor.fetchall()} == _get_tables()
+
+        await cursor.execute(
+            "SELECT name, description FROM tags ORDER BY name ASC;",
+        )
+        assert set(await cursor.fetchall()) == {
+            ("//dogs/", "dogs are cool"),
+            ("//other/", None),
+            ("//tag/", "a tag"),
+            ("//tag/that/", None),
+            ("//tag/that/is/nested/", "another tag"),
+        }
+
+        # skipping path because it's hardcoded to an old temp path
+        await cursor.execute(
+            """
+            SELECT id, name, description, source, destination, removable
+            FROM locations
+            ORDER BY name ASC;
+            """
+        )
+        assert await cursor.fetchall() == [
+            (1, "main", "main storage", True, True, False),
+            (2, "portable", None, False, True, True),
+        ]
+
+        await cursor.execute(
+            """
+            SELECT
+                id, (version).major, (version).minor, (version).patch, (version).label
+            FROM version
+            ORDER BY id ASC;
+            """
+        )
+
+        assert await cursor.fetchall() == [
+            (1, 0, 1, 0, None),
+            (2, 0, 2, 0, "dev"),
         ]
 
 

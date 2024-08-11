@@ -74,7 +74,7 @@ def test_parse_connection_info(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_matching_version(tmp_path):
+async def test_compatible_backend(tmp_path):
     from picpocket.configuration import Configuration
     from picpocket.database.sqlite import SCHEMA_FILE, SCHEMA_VERSION, Sqlite
     from picpocket.version import Version
@@ -85,12 +85,12 @@ async def test_matching_version(tmp_path):
 
     sqlite = Sqlite(configuration)
 
-    assert sqlite.get_api_version() == SCHEMA_VERSION
+    assert sqlite.backend_api_version() == SCHEMA_VERSION
 
     # create the database file
     sqlite3.connect(tmp_path / "test.sqlite").close()
 
-    assert not await sqlite.matching_version()
+    assert not await sqlite.compatible_backend()
 
     async with await sqlite.connect() as connection:
         # no rows
@@ -98,10 +98,10 @@ async def test_matching_version(tmp_path):
         await cursor.executescript(SCHEMA_FILE.read_text())
         await connection.commit()
 
-        assert not await sqlite.matching_version()
+        assert not await sqlite.compatible_backend()
 
         with pytest.raises(ValueError):
-            await sqlite.get_version()
+            await sqlite.backend_schema_version()
 
         # matching version
         await cursor.execute(
@@ -110,8 +110,8 @@ async def test_matching_version(tmp_path):
         )
         await connection.commit()
 
-        assert await sqlite.matching_version()
-        assert await sqlite.get_version() == SCHEMA_VERSION
+        assert await sqlite.compatible_backend()
+        assert await sqlite.backend_schema_version() == SCHEMA_VERSION
 
         # version mismatch
         for offset in (-1, 1):
@@ -168,8 +168,8 @@ async def test_matching_version(tmp_path):
                 )
                 await connection.commit()
 
-                assert not await sqlite.matching_version()
-                assert await sqlite.get_version() == version
+                assert not await sqlite.compatible_backend()
+                assert await sqlite.backend_schema_version() == version
 
         # make sure it's looking at the last
         await cursor.execute(
@@ -178,7 +178,7 @@ async def test_matching_version(tmp_path):
         )
         await connection.commit()
 
-        assert await sqlite.matching_version()
+        assert await sqlite.compatible_backend()
 
 
 @pytest.mark.asyncio
@@ -270,8 +270,8 @@ async def test_initialize(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_create_backup(load_api, tmp_path, image_files):
-    from picpocket.version import SQLITE_VERSION
+async def test_backup_restore(load_api, tmp_path, image_files):
+    from picpocket.version import SQLITE_VERSION, VERSION
 
     async with load_api(backend="sqlite") as api:
         await api.add_tag("dogs", "dogs are cool")
@@ -337,11 +337,11 @@ async def test_create_backup(load_api, tmp_path, image_files):
             file_formats=["bmp"],
         )
 
-        filename = tmp_path / "backup.sqlite"
+        restore_filename = tmp_path / "backup.sqlite"
         directory = tmp_path / "subdirectory"
 
-        path_1 = await api.create_backup(filename)
-        assert path_1 == filename
+        path_1 = await api.create_backup(restore_filename)
+        assert path_1 == restore_filename
         assert path_1.exists()
 
         before = datetime.now().replace(microsecond=0)
@@ -351,14 +351,16 @@ async def test_create_backup(load_api, tmp_path, image_files):
         assert path_2.exists()
         match = re.search(
             (
-                r"^picpocket-(\d+\.\d+\.\d+(?:\.dev)?)"
+                r"^picpocket-(\d+\.\d+\.\d+(?:-dev)?)"
+                r"-(\d+\.\d+\.\d+(?:-dev)?)"
                 r"-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\.sqlite$"
             ),
             path_2.name,
         )
         assert match
-        assert match.group(1) == str(SQLITE_VERSION)
-        date = datetime.strptime(match.group(2), "%Y-%m-%d-%H-%M-%S")
+        assert match.group(1) == str(VERSION)
+        assert match.group(2) == str(SQLITE_VERSION)
+        date = datetime.strptime(match.group(3), "%Y-%m-%d-%H-%M-%S")
         assert before <= date <= after
 
         assert path_1.read_bytes() == path_2.read_bytes()
@@ -373,13 +375,8 @@ async def test_create_backup(load_api, tmp_path, image_files):
             assert connection.execute("SELECT COUNT(*) FROM images").fetchone() == (4,)
             assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (3,)
 
-
-@pytest.mark.asyncio
-async def test_restore_backup(load_api, tmp_path, image_files):
-    from picpocket.version import SQLITE_VERSION
-
     async with load_api(backend="sqlite") as api:
-        await api.restore_backup(VERSIONS_DIRECTORY / f"{SQLITE_VERSION}.sqlite")
+        await api.restore_backup(restore_filename)
 
         path = Path(api.configuration.contents["backend"]["connection"]["path"])
         if not path.is_absolute():
@@ -420,6 +417,44 @@ async def test_restore_backup(load_api, tmp_path, image_files):
             )
             assert connection.execute("SELECT COUNT(*) FROM images").fetchone() == (4,)
             assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (3,)
+
+
+# As migrations occur, we should add a test for upgrading from each
+# previous backend. Tests should be specific in testing migrations make
+# expected changes
+@pytest.mark.asyncio
+async def test_upgrade_backend_0_1_0(load_api, tmp_path, image_files):
+    from picpocket.version import SQLITE_VERSION
+
+    async with load_api(backend="sqlite") as api:
+        starting_backup = VERSIONS_DIRECTORY / "0.1.0.sqlite"
+        await api.restore_backup(starting_backup)
+
+        backup = await api.upgrade_backend(tmp_path)
+
+        assert starting_backup.read_bytes() == backup.read_bytes()
+
+        path = Path(api.configuration.contents["backend"]["connection"]["path"])
+        if not path.is_absolute():
+            path = api.configuration.directory / path
+
+        assert await api.compatible_backend()
+        assert await api.backend_schema_version() == SQLITE_VERSION
+
+        with sqlite3.connect(path) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM tags").fetchone() == (5,)
+            assert connection.execute("SELECT COUNT(*) FROM locations").fetchone() == (
+                2,
+            )
+            assert connection.execute("SELECT COUNT(*) FROM images").fetchone() == (4,)
+            assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (3,)
+
+            assert connection.execute(
+                "SELECT id, major, minor, patch, label FROM version ORDER BY id ASC"
+            ).fetchall() == [
+                (1, 0, 1, 0, None),
+                (2, 0, 2, 0, "dev"),
+            ]
 
 
 @pytest.mark.asyncio
