@@ -16,37 +16,6 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
-ALTER TABLE ONLY public.tasks DROP CONSTRAINT tasks_source_fkey;
-ALTER TABLE ONLY public.tasks DROP CONSTRAINT tasks_destination_fkey;
-ALTER TABLE ONLY public.task_invocations DROP CONSTRAINT task_invocations_task_fkey;
-ALTER TABLE ONLY public.images DROP CONSTRAINT images_location_fkey;
-ALTER TABLE ONLY public.image_tags DROP CONSTRAINT image_tags_tag_fkey;
-ALTER TABLE ONLY public.image_tags DROP CONSTRAINT image_tags_image_fkey;
-ALTER TABLE ONLY public.version DROP CONSTRAINT version_pkey;
-ALTER TABLE ONLY public.tasks DROP CONSTRAINT tasks_pkey;
-ALTER TABLE ONLY public.task_invocations DROP CONSTRAINT task_invocations_pkey;
-ALTER TABLE ONLY public.tags DROP CONSTRAINT tags_pkey;
-ALTER TABLE ONLY public.tags DROP CONSTRAINT tags_name_key;
-ALTER TABLE ONLY public.tags DROP CONSTRAINT tags_escaped_name_key;
-ALTER TABLE ONLY public.session_info DROP CONSTRAINT session_info_pkey;
-ALTER TABLE ONLY public.relation DROP CONSTRAINT relation_pkey;
-ALTER TABLE ONLY public.photo_tags DROP CONSTRAINT photo_tags_pkey;
-ALTER TABLE ONLY public.locations DROP CONSTRAINT locations_pkey;
-ALTER TABLE ONLY public.locations DROP CONSTRAINT locations_name_key;
-ALTER TABLE ONLY public.images DROP CONSTRAINT images_pkey;
-ALTER TABLE ONLY public.images DROP CONSTRAINT images_location_path_key;
-ALTER TABLE ONLY public.image_tags DROP CONSTRAINT image_tags_pkey;
-DROP TABLE public.version;
-DROP TABLE public.tasks;
-DROP TABLE public.task_invocations;
-DROP TABLE public.tags;
-DROP TABLE public.session_info;
-DROP TABLE public.relation;
-DROP TABLE public.photo_tags;
-DROP TABLE public.locations;
-DROP TABLE public.images;
-DROP TABLE public.image_tags;
-DROP TYPE public.version_number;
 --
 -- Name: version_number; Type: TYPE; Schema: public; Owner: testpicpocket
 --
@@ -147,31 +116,6 @@ ALTER TABLE public.locations ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     CACHE 1
 );
 
-
---
--- Name: photo_tags; Type: TABLE; Schema: public; Owner: testpicpocket
---
-
-CREATE TABLE public.photo_tags (
-    image integer NOT NULL,
-    tag integer NOT NULL
-);
-
-
-ALTER TABLE public.photo_tags OWNER TO testpicpocket;
-
---
--- Name: relation; Type: TABLE; Schema: public; Owner: testpicpocket
---
-
-CREATE TABLE public.relation (
-    image integer NOT NULL,
-    parent integer NOT NULL,
-    description text
-);
-
-
-ALTER TABLE public.relation OWNER TO testpicpocket;
 
 --
 -- Name: session_info; Type: TABLE; Schema: public; Owner: testpicpocket
@@ -311,24 +255,8 @@ COPY public.images (id, hash, creation_date, last_modified, name, extension, wid
 --
 
 COPY public.locations (id, name, description, path, source, destination, removable) FROM stdin;
-1	main	main storage	/private/var/folders/42/y27827s955l88y_kdqfg8x240000gn/T/pytest-of-bcj/pytest-228/test_create_backup0/main	t	t	f
+1	main	main storage	/private/var/folders/42/y27827s955l88y_kdqfg8x240000gn/T/pytest-of-bcj/pytest-378/test_backup_restore0/main	t	t	f
 2	portable	\N	\N	f	t	t
-\.
-
-
---
--- Data for Name: photo_tags; Type: TABLE DATA; Schema: public; Owner: testpicpocket
---
-
-COPY public.photo_tags (image, tag) FROM stdin;
-\.
-
-
---
--- Data for Name: relation; Type: TABLE DATA; Schema: public; Owner: testpicpocket
---
-
-COPY public.relation (image, parent, description) FROM stdin;
 \.
 
 
@@ -454,22 +382,6 @@ ALTER TABLE ONLY public.locations
 
 ALTER TABLE ONLY public.locations
     ADD CONSTRAINT locations_pkey PRIMARY KEY (id);
-
-
---
--- Name: photo_tags photo_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: testpicpocket
---
-
-ALTER TABLE ONLY public.photo_tags
-    ADD CONSTRAINT photo_tags_pkey PRIMARY KEY (image, tag);
-
-
---
--- Name: relation relation_pkey; Type: CONSTRAINT; Schema: public; Owner: testpicpocket
---
-
-ALTER TABLE ONLY public.relation
-    ADD CONSTRAINT relation_pkey PRIMARY KEY (image, parent);
 
 
 --

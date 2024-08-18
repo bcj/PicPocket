@@ -1483,6 +1483,7 @@ def test_parse_cli(tmp_path):
 @pytest.mark.asyncio
 async def test_run_meta(load_api, tmp_path, image_files):
     from picpocket.cli import run_meta
+    from tests.conftest import _wipe
 
     def compare_json_files(a: Path, b: Path):
         with a.open() as stream:
@@ -1597,6 +1598,8 @@ async def test_run_meta(load_api, tmp_path, image_files):
         assert len(await picpocket.list_locations()) == 1
         assert await picpocket.count_images() == 2
 
+    backend = os.environ.get("PICPOCKET_BACKEND", "sqlite")
+
     # backup/restore
     async with load_api() as picpocket:
         id = await picpocket.add_location("main", main, destination=True)
@@ -1626,6 +1629,10 @@ async def test_run_meta(load_api, tmp_path, image_files):
         main_location = await picpocket.get_location("main")
         await picpocket.remove_location("main", force=True)
 
+        # postgres restore backup only works from a blank state
+        if backend == "postgres":
+            _wipe(picpocket.configuration.contents["backend"]["connection"])
+
         await run_meta(
             picpocket,
             Namespace(command="restore", path=cli_backup),
@@ -1635,8 +1642,6 @@ async def test_run_meta(load_api, tmp_path, image_files):
         assert main_location == await picpocket.get_location("main")
 
     # upgrade
-    backend = os.environ.get("PICPOCKET_BACKEND", "sqlite")
-
     match backend:
         case "sqlite":
             starting_backup = VERSIONS_DIRECTORY / backend / "0.1.0.sqlite"
@@ -1646,6 +1651,9 @@ async def test_run_meta(load_api, tmp_path, image_files):
             backup_file = tmp_path / "backup.sql"
 
     async with load_api(backend=backend) as picpocket:
+        if backend == "postgres":
+            _wipe(picpocket.configuration.contents["backend"]["connection"])
+
         await picpocket.restore_backup(starting_backup)
         await run_meta(picpocket, Namespace(command="upgrade", path=backup_file))
 

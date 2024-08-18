@@ -576,6 +576,7 @@ async def test_backup_restore(pg_credentials, load_api, tmp_path, image_files):
         assert await cursor.fetchone() == (0,)
 
     async with load_api(backend="postgres") as api:
+        _wipe(pg_credentials)
         await api.restore_backup(restore_filename)
 
         # not exhaustive but probably enough?
@@ -698,9 +699,11 @@ async def test_upgrade_backend_0_1_0(pg_credentials, load_api, tmp_path, image_f
     import psycopg
 
     from picpocket.database.postgres import SCHEMA_VERSION, _get_tables
+    from tests.conftest import _wipe
 
     async with load_api(backend="postgres") as api:
         starting_backup = VERSIONS_DIRECTORY / "0.1.0.sql"
+        _wipe(pg_credentials)
         await api.restore_backup(starting_backup)
 
         backup = await api.upgrade_backend(tmp_path)

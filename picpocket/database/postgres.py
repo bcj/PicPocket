@@ -298,7 +298,6 @@ class Postgres(DbApi):
 
         command = [
             "pg_dump",
-            "--clean",
             "--file",
             str(path),
             "--dbname",
