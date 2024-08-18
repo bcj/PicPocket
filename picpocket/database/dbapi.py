@@ -2778,15 +2778,20 @@ class DbApi(PicPocket, ABC):
             self.cursor(connection, commit=True) as cursor,
         ):
             description = None
+            exemplar = None
             kids: set[str] = set()
 
             await cursor.execute(
-                f"SELECT description FROM tags WHERE name = {self.sql.param};",
+                f"""
+                SELECT description, exemplar
+                FROM tags WHERE name = {self.sql.param};
+                """,
                 (serialized,),
             )
             row = await cursor.fetchone()
             if row:
                 description = row[0]
+                exemplar = row[1]
 
             if children:
                 serialized = f"{escape(serialized, self.sql.escape)}_%"
@@ -2803,7 +2808,40 @@ class DbApi(PicPocket, ABC):
                 for (serialized,) in await cursor.fetchall():
                     kids.add(deserialize_tag(serialized)[ignore:].split("/", 1)[0])
 
-            return Tag(tag, description, kids)
+            return Tag(tag, description, kids, exemplar)
+
+    async def set_tag_example(self, tag: str, image: int):
+        serialized = serialize_tag(tag)
+
+        async with (
+            await self.connect() as connection,
+            self.cursor(connection, commit=True) as cursor,
+        ):
+            await self._add_tag(cursor, tag)
+            await cursor.execute(
+                f"""
+                UPDATE tags
+                SET exemplar = {self.sql.param}
+                WHERE name = {self.sql.param};
+                """,
+                (image, serialized),
+            )
+
+    async def clear_tag_example(self, tag: str):
+        serialized = serialize_tag(tag)
+
+        async with (
+            await self.connect() as connection,
+            self.cursor(connection, commit=True) as cursor,
+        ):
+            await cursor.execute(
+                f"""
+                UPDATE tags
+                SET exemplar = NULL
+                WHERE name = {self.sql.param};
+                """,
+                (serialized,),
+            )
 
     async def all_tag_names(self) -> set[str]:
         async with (
@@ -2822,20 +2860,29 @@ class DbApi(PicPocket, ABC):
             await self.connect() as connection,
             self.cursor(connection) as cursor,
         ):
-            await cursor.execute("SELECT name, description FROM tags;")
-            for serialized, description in await cursor.fetchall():
+            await cursor.execute("SELECT name, description, exemplar FROM tags;")
+            for serialized, description, exemplar in await cursor.fetchall():
                 current = tags
                 *parents, name = deserialize_tag(serialized).split("/")
                 for part in parents:
                     if part not in current:
-                        current[part] = {"description": None, "children": {}}
+                        current[part] = {
+                            "description": None,
+                            "exemplar": None,
+                            "children": {},
+                        }
 
                     current = current[part]["children"]
 
                 if name in current:
                     current[name]["description"] = description
+                    current[name]["exemplar"] = exemplar
                 else:
-                    current[name] = {"description": description, "children": {}}
+                    current[name] = {
+                        "description": description,
+                        "exemplar": exemplar,
+                        "children": {},
+                    }
 
         return tags
 

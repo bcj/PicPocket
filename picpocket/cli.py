@@ -1754,7 +1754,19 @@ def build_tags(action) -> list[ArgumentParser]:
         help="Output tags as json",
     )
 
-    return [add, move, remove, listing]
+    set_example = subparsers.add_parser(
+        "set",
+        help="Set an example image for a tag",
+    )
+    set_example.add_argument("name", help="The name of the tag")
+    set_example.add_argument("image", type=int, help="The image ID")
+
+    clear_example = subparsers.add_parser(
+        "clear", help="Clear the example image for a tag"
+    )
+    clear_example.add_argument("name", help="The name of the tag")
+
+    return [add, move, remove, listing, set_example, clear_example]
 
 
 async def run_tag(picpocket: PicPocket, args: Namespace, print=print):
@@ -1778,6 +1790,12 @@ async def run_tag(picpocket: PicPocket, args: Namespace, print=print):
             else:
                 for tag in sorted(tags):
                     print_tags(tags, print=print)
+        case "set":
+            await picpocket.set_tag_example(args.name, args.image)
+            print(f"example image set for tag {args.name}")
+        case "clear":
+            await picpocket.clear_tag_example(args.name)
+            print(f"example image cleared for tag {args.name}")
         case _:
             raise NotImplementedError(
                 f"Command 'tag {args.subcommand}' not implemented"
@@ -1832,6 +1850,9 @@ def print_tags(tags: dict, print=print, parents=""):
         line = name
         if value["description"]:
             line = f"{line}: {value['description']}"
+
+        if value["exemplar"]:
+            line = f"{line} (see {value['exemplar']})"
 
         print(line)
         print_tags(value["children"], print=print, parents=name)

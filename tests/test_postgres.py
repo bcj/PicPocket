@@ -711,6 +711,11 @@ async def test_upgrade_backend_0_1_0(pg_credentials, load_api, tmp_path, image_f
         assert await api.compatible_backend()
         assert await api.backend_schema_version() == SCHEMA_VERSION
 
+        # make sure new column exists post-upgrade
+        id = 1
+        await api.set_tag_example("a/tag", id)
+        assert (await api.get_tag("a/tag")).exemplar == id
+
     assert starting_backup.read_bytes() == backup.read_bytes()
 
     async with (
@@ -724,14 +729,15 @@ async def test_upgrade_backend_0_1_0(pg_credentials, load_api, tmp_path, image_f
         assert {row[0] for row in await cursor.fetchall()} == _get_tables()
 
         await cursor.execute(
-            "SELECT name, description FROM tags ORDER BY name ASC;",
+            "SELECT name, description, exemplar FROM tags ORDER BY name ASC;",
         )
         assert set(await cursor.fetchall()) == {
-            ("//dogs/", "dogs are cool"),
-            ("//other/", None),
-            ("//tag/", "a tag"),
-            ("//tag/that/", None),
-            ("//tag/that/is/nested/", "another tag"),
+            ("//a/tag/", None, id),
+            ("//dogs/", "dogs are cool", None),
+            ("//other/", None, None),
+            ("//tag/", "a tag", None),
+            ("//tag/that/", None, None),
+            ("//tag/that/is/nested/", "another tag", None),
         }
 
         # skipping path because it's hardcoded to an old temp path

@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS tags (
     name TEXT UNIQUE,
     escaped_name TEXT UNIQUE,
     depth INTEGER NOT NULL,
-    description TEXT
+    description TEXT,
+    exemplar INTEGER REFERENCES images (id) ON DELETE SET NULL
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS image_tags (

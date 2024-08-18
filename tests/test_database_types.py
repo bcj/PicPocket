@@ -161,9 +161,12 @@ def test_tag():
     assert Tag("a/b/c", "a tag") == Tag("a/b/c", "a tag", children={"d", "dee"})
     assert Tag("a/b/c", "a tag") != Tag("a/b/c", "a different description")
     assert Tag("a/b/c", "a tag") != Tag("a/b/d", "a tag")
+    assert Tag("a/b/c", "a tag") != Tag("a/b/c", "a tag", exemplar=1)
+    assert Tag("a/b/c", "a tag", exemplar=1) == Tag("a/b/c", "a tag", exemplar=1)
 
     assert Tag("a/b/c", "a tag", children={"d", "dee"}).serialize() == {
         "name": "a/b/c",
         "description": "a tag",
+        "exemplar": None,
         "children": ["d", "dee"],
     }

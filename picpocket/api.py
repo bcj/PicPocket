@@ -958,6 +958,21 @@ class PicPocket(Protocol):
             The tag
         """
 
+    async def set_tag_example(self, tag: str, image: int):
+        """Set an image as the example of a tag
+
+        Args:
+            tag: The tag to add an image for
+            image: The id of an image that represents the tag
+        """
+
+    async def clear_tag_example(self, tag: str):
+        """Remove the example image for a tag
+
+        Args:
+            tag: The tag to remove an image example from.
+        """
+
     async def all_tag_names(self) -> set[str]:
         """Get the names of all used tags
 

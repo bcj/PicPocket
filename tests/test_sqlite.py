@@ -456,6 +456,12 @@ async def test_upgrade_backend_0_1_0(load_api, tmp_path, image_files):
                 (2, 0, 2, 0, "dev"),
             ]
 
+            (id,) = connection.execute("SELECT id FROM images LIMIT 1;").fetchone()
+
+        # make sure new column exists post-upgrade
+        await api.set_tag_example("a/tag", id)
+        assert (await api.get_tag("a/tag")).exemplar == id
+
 
 @pytest.mark.asyncio
 async def test_import_images_batching(load_api, tmp_path):

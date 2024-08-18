@@ -1273,6 +1273,8 @@ def test_build_tags(create_parser):
         "tag move",
         "tag remove",
         "tag list",
+        "tag set",
+        "tag clear",
     }
 
     # add
@@ -1347,6 +1349,23 @@ def test_build_tags(create_parser):
         command="tag",
         subcommand="list",
         output=Output.JSON,
+    )
+
+    # set
+    args = parser.parse_args(["tag", "set", "abc/def", "1"])
+    assert args == Namespace(
+        command="tag",
+        subcommand="set",
+        name="abc/def",
+        image=1,
+    )
+
+    # clear
+    args = parser.parse_args(["tag", "clear", "abc/def"])
+    assert args == Namespace(
+        command="tag",
+        subcommand="clear",
+        name="abc/def",
     )
 
 
@@ -3447,7 +3466,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
 
 
 @pytest.mark.asyncio
-async def test_run_tag(load_api):
+async def test_run_tag(load_api, tmp_path, image_files):
     from picpocket.cli import Output, run_tag
 
     async with load_api() as picpocket:
@@ -3494,7 +3513,9 @@ async def test_run_tag(load_api):
             ),
             print=printer.print,
         )
-        assert printer.json() == {"name": {"description": None, "children": {}}}
+        assert printer.json() == {
+            "name": {"description": None, "exemplar": None, "children": {}}
+        }
 
         await run_tag(
             picpocket,
@@ -3518,15 +3539,19 @@ async def test_run_tag(load_api):
         assert printer.json() == {
             "a": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "deeply": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
                             "nested": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "tag": {
                                         "description": "A tag description",
+                                        "exemplar": None,
                                         "children": {},
                                     },
                                 },
@@ -3535,7 +3560,7 @@ async def test_run_tag(load_api):
                     },
                 },
             },
-            "name": {"description": None, "children": {}},
+            "name": {"description": None, "exemplar": None, "children": {}},
         }
 
         # remove
@@ -3578,15 +3603,19 @@ async def test_run_tag(load_api):
         assert printer.json() == {
             "a": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "deeply": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
                             "nested": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "tag": {
                                         "description": "A tag description",
+                                        "exemplar": None,
                                         "children": {},
                                     },
                                 },
@@ -3597,8 +3626,13 @@ async def test_run_tag(load_api):
             },
             "name": {
                 "description": None,
+                "exemplar": None,
                 "children": {
-                    "child": {"description": "child's description", "children": {}}
+                    "child": {
+                        "description": "child's description",
+                        "exemplar": None,
+                        "children": {},
+                    },
                 },
             },
         }
@@ -3623,15 +3657,19 @@ async def test_run_tag(load_api):
         assert printer.json() == {
             "a": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "deeply": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
                             "nested": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "tag": {
                                         "description": "A tag description",
+                                        "exemplar": None,
                                         "children": {},
                                     },
                                 },
@@ -3694,6 +3732,42 @@ async def test_run_tag(load_api):
             print=printer.print,
         )
         assert printer.text().split(" ", 1)[0] == "2"
+
+        # set tag example
+        main = tmp_path / "main"
+        main.mkdir()
+
+        shutil.copy2(image_files[0], (main / "a.JPEG"))
+        shutil.copy2(image_files[1], (main / "b.png"))
+
+        main_id = await picpocket.add_location("main", main, destination=True)
+        await picpocket.import_location(main_id)
+
+        image_id = (await picpocket.find_image(main / "a.JPEG")).id
+
+        await run_tag(
+            picpocket,
+            Namespace(
+                command="tag",
+                subcommand="set",
+                name="testing",
+                image=image_id,
+            ),
+            print=printer.print,
+        )
+        assert (await picpocket.get_tag("testing")).exemplar == image_id
+
+        # clear tag example
+        await run_tag(
+            picpocket,
+            Namespace(
+                command="tag",
+                subcommand="clear",
+                name="testing",
+            ),
+            print=printer.print,
+        )
+        assert (await picpocket.get_tag("testing")).exemplar is None
 
         # unknown command
         with pytest.raises(NotImplementedError):
