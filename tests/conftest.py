@@ -347,3 +347,14 @@ async def _wipe_async(connection):
             await cursor.execute(f"DROP TYPE IF EXISTS {custom_type} CASCADE;")
 
     await connection.commit()
+
+
+def matching_dumps(a: Path, b: Path, backend: str):
+    if backend == "postgres":
+        assert strip_dump_header(a) == strip_dump_header(b)
+    else:
+        assert a.read_bytes() == b.read_bytes()
+
+
+def strip_dump_header(backup: Path) -> bytes:
+    return b"\n".join(backup.read_bytes().splitlines()[7:])

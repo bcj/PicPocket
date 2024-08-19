@@ -699,7 +699,7 @@ async def test_upgrade_backend_0_1_0(pg_credentials, load_api, tmp_path, image_f
     import psycopg
 
     from picpocket.database.postgres import SCHEMA_VERSION, _get_tables
-    from tests.conftest import _wipe
+    from tests.conftest import _wipe, matching_dumps
 
     async with load_api(backend="postgres") as api:
         starting_backup = VERSIONS_DIRECTORY / "0.1.0.sql"
@@ -716,7 +716,7 @@ async def test_upgrade_backend_0_1_0(pg_credentials, load_api, tmp_path, image_f
         await api.set_tag_example("a/tag", id)
         assert (await api.get_tag("a/tag")).exemplar == id
 
-    assert starting_backup.read_bytes() == backup.read_bytes()
+    matching_dumps(starting_backup, backup, "postgres")
 
     async with (
         await psycopg.AsyncConnection.connect(**pg_credentials) as connection,

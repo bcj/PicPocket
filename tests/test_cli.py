@@ -1502,7 +1502,7 @@ def test_parse_cli(tmp_path):
 @pytest.mark.asyncio
 async def test_run_meta(load_api, tmp_path, image_files):
     from picpocket.cli import run_meta
-    from tests.conftest import _wipe
+    from tests.conftest import _wipe, matching_dumps
 
     def compare_json_files(a: Path, b: Path):
         with a.open() as stream:
@@ -1643,7 +1643,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
         )
         await picpocket.create_backup(api_backup)
 
-        assert api_backup.read_bytes() == cli_backup.read_bytes()
+        matching_dumps(api_backup, cli_backup, backend)
 
         main_location = await picpocket.get_location("main")
         await picpocket.remove_location("main", force=True)
@@ -1676,7 +1676,8 @@ async def test_run_meta(load_api, tmp_path, image_files):
         await picpocket.restore_backup(starting_backup)
         await run_meta(picpocket, Namespace(command="upgrade", path=backup_file))
 
-        assert starting_backup.read_bytes() == backup_file.read_bytes()
+        matching_dumps(starting_backup, backup_file, backend)
+
         assert await picpocket.compatible_backend()
 
     # unknown command
