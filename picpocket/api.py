@@ -81,7 +81,7 @@ class PicPocket(Protocol):
 
         Parse information required for connecting to the underlying
         database PicPocket is built on top of. Backends may take
-        whatever argumetns they want as long as they accept `directory`
+        whatever arguments they want as long as they accept `directory`
         and `store_credentials`
 
         Args:
@@ -105,7 +105,7 @@ class PicPocket(Protocol):
         exception if anything fails.
         """
 
-    def get_api_version(self) -> Version:
+    def api_version(self) -> Version:
         """Get the version of the PicPocket API
 
         This should always match package version.
@@ -114,17 +114,83 @@ class PicPocket(Protocol):
             A Version object.
         """
 
-    async def get_version(self) -> Version:
-        """Get teh version of the backend API
+    def backend_api_version(self) -> Version:
+        """Get the version of the backend API
 
         Returns:
             The version of the backend interface being used.
         """
 
-    async def matching_version(self) -> bool:
-        """Check version compatibility
+    async def compatible_backend(self) -> bool:
+        """Check that the configured backend matches the actual backend
 
-        Check whether the configured backend is compatible with this API
+        Returns:
+            True if the backend type and version match
+        """
+
+    async def upgrade_backend(self, path: Optional[Path]) -> Optional[Path]:
+        """Update the backend version
+
+        Migrate the backend storage to a version supported by the
+        PicPocket API.
+
+        Args:
+            path: A location to save a backup prior to migrating the
+                back end
+
+        Returns:
+            The backup file if one was generated
+        """
+
+    async def create_backup(self, path: Path) -> Path:
+        """Backup PicPocket data
+
+        Create a backup of PicPocket's backend (locations, tasks, image
+        info, tags).
+
+        Returns:
+            The path to the generated backup file.
+
+        .. note::
+            Unlike `export_data`, this stores the data in a
+            backend-specific way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
+
+        .. note::
+            `create_backup` may not be implemented for all backends.
+
+        .. warning::
+            This file will not contain the images themselves, just the
+            metadata you've created for the image (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The directory to save the backup to. The format of
+                the resulting backup is backend-specific.
+        """
+
+    async def restore_backup(self, path: Path):
+        """Restore PicPocket data from a previously created backup
+
+        Restore a backup of PicPocket's backend (locations, tasks, image
+        info, tags). This operation will be destructive.
+
+        .. note::
+            Unlike `import_data`, the backup must have been created from
+            the same backend as the one currently being used.
+
+        .. note::
+            `restore_backup` may not be implemented for all backends.
+
+        .. warning::
+            This backup will not contain the images themselves, just the
+            metadata you've created for the images (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The path to the existing backup file.
         """
 
     async def import_data(
@@ -132,9 +198,9 @@ class PicPocket(Protocol):
         path: Path,
         locations: Optional[list[str] | dict[str, Optional[Path]]] = None,
     ):
-        """Import a PicPocket backup
+        """Import PicPocket data
 
-        Load data (locations, tasks, images, tags) from a PicPocket
+        Load data (locations, tasks, image info, tags) from a PicPocket
         backup created using :meth:`.export_data`. This is the
         recommended way to migrate between backends.
 
@@ -162,10 +228,17 @@ class PicPocket(Protocol):
     async def export_data(
         self, path: Path, locations: Optional[list[str | int]] = None
     ):
-        """Create a PicPocket backup
+        """Export PicPocket data
 
-        Export data (locations, tasks, iamges, tags) from PicPocket.
+        Export data (locations, tasks, image info, tags) from PicPocket.
         This is the recommended way to migrate between backends.
+
+        .. note::
+            Unlike `create_backup`, this stores the data in a
+            backend-agnostic way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
 
         .. warning::
             This file will not contain the images themselves, just the
@@ -173,7 +246,7 @@ class PicPocket(Protocol):
             alt text, etc.).
 
         Args:
-            path: Where to save teh JSON file to store data to.
+            path: Where to save the JSON file to store data to.
             locations: Only export images and task related to this
                 location.
         """
@@ -578,7 +651,8 @@ class PicPocket(Protocol):
             id: The image to remove from PicPocket
             delete: Delete the image on-disk as well. If `True`, the
                 image will only be removed from PicPocket if the
-                delete is successful
+                delete is successful. Deleted files will be sent to the
+                trash.
         """
 
     async def get_image(self, id: int, tags: bool = False) -> Optional[Image]:
@@ -882,6 +956,21 @@ class PicPocket(Protocol):
 
         Returns:
             The tag
+        """
+
+    async def set_tag_example(self, tag: str, image: int):
+        """Set an image as the example of a tag
+
+        Args:
+            tag: The tag to add an image for
+            image: The id of an image that represents the tag
+        """
+
+    async def clear_tag_example(self, tag: str):
+        """Remove the example image for a tag
+
+        Args:
+            tag: The tag to remove an image example from.
         """
 
     async def all_tag_names(self) -> set[str]:

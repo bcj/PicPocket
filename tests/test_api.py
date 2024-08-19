@@ -1,9 +1,11 @@
 import json
 import os
 import shutil
+import sys
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -50,6 +52,7 @@ def check_tag_dict(actual, expected):
 
                 e_data = e[tag]
                 assert a_data["description"] == e_data["description"]
+                assert a_data["exemplar"] == e_data["exemplar"]
                 remaining.append((new_path, a_data["children"], e_data["children"]))
 
 
@@ -1360,8 +1363,10 @@ async def test_move_image(load_api, tmp_path, image_files):
 @pytest.mark.asyncio
 async def test_remove_image(load_api, tmp_path, image_files):
     async with load_api() as api:
+        unique_filename = f"{uuid4().hex}.jpg"
+
         ids = {}
-        filenames = ("a.jpg", "b.JPEG", "c.d/e.png", "f.bmp", "g.gif")
+        filenames = (unique_filename, "b.JPEG", "c.d/e.png", "f.bmp", "g.gif")
 
         for name, save_path, removable in (
             ("main", True, False),
@@ -1391,38 +1396,47 @@ async def test_remove_image(load_api, tmp_path, image_files):
         shutil.rmtree(tmp_path / "unmounted")
 
         # remove an image
-        image = await api.find_image(tmp_path / "main" / "a.jpg")
+        image = await api.find_image(tmp_path / "main" / unique_filename)
         await api.remove_image(image.id, delete=True)
-        assert not (tmp_path / "main" / "a.jpg").exists()
-        assert await api.find_image(tmp_path / "main" / "a.jpg") is None
+        assert not (tmp_path / "main" / unique_filename).exists()
+        assert await api.find_image(tmp_path / "main" / unique_filename) is None
 
         # non-existent image
         with pytest.raises(Exception):
             await api.remove_image(image.id, delete=True)
 
         # not mounted
-        image = await api.find_image(tmp_path / "unmounted" / "a.jpg")
+        image = await api.find_image(tmp_path / "unmounted" / unique_filename)
         with pytest.raises(Exception):
             await api.remove_image(image.id, delete=True)
-        assert image == await api.find_image(tmp_path / "unmounted" / "a.jpg")
+        assert image == await api.find_image(tmp_path / "unmounted" / unique_filename)
 
         await api.mount(ids["external"], tmp_path / "external")
-        image = await api.find_image(tmp_path / "external" / "a.jpg")
+        image = await api.find_image(tmp_path / "external" / unique_filename)
         await api.unmount(ids["external"])
         assert image is not None
         with pytest.raises(Exception):
             await api.remove_image(image.id, delete=True)
         await api.mount(ids["external"], tmp_path / "external")
-        assert image == await api.find_image(tmp_path / "external" / "a.jpg")
+        assert image == await api.find_image(tmp_path / "external" / unique_filename)
         await api.unmount(ids["external"])
-        assert (tmp_path / "external" / "a.jpg").exists()
+        assert (tmp_path / "external" / unique_filename).exists()
 
         # location supplied
         await api.mount(ids["external"], tmp_path / "external")
         await api.remove_image(image.id, delete=True)
-        assert await api.find_image(tmp_path / "external" / "a.jpg") is None
+        assert await api.find_image(tmp_path / "external" / unique_filename) is None
         await api.unmount(ids["external"])
-        assert not (tmp_path / "external" / "a.jpg").exists()
+        assert not (tmp_path / "external" / unique_filename).exists()
+
+        match sys.platform:
+            case "darwin":
+                # Presumably if you're reading this, you're trash
+                # directory isn't here. Please file an issue explaining
+                # the not-at-all weird setup you have.
+                assert (Path.home() / ".Trash" / unique_filename).exists()
+            case _:
+                pass
 
         # don't delete
         image = await api.find_image(tmp_path / "main" / "b.JPEG")
@@ -2077,6 +2091,38 @@ async def test_search_images(load_api, tmp_path, image_files):
 
 
 @pytest.mark.asyncio
+async def test_tag_add_clear_tag_example(load_api, tmp_path, image_files):
+    async with load_api() as api:
+        location = await api.add_location("main", tmp_path, destination=True)
+
+        a_path = tmp_path / "a.jpg"
+        shutil.copy2(image_files[0], a_path)
+
+        b_path = tmp_path / "b.jpg"
+        shutil.copy2(image_files[1], b_path)
+
+        await api.import_location(location)
+
+        a = await api.find_image(a_path)
+        b = await api.find_image(b_path)
+
+        await api.tag_image(a.id, "tag")
+        await api.tag_image(a.id, "another tag")
+
+        assert (await api.get_tag("tag")).exemplar is None
+        assert (await api.get_tag("another tag")).exemplar is None
+        await api.set_tag_example("tag", a.id)
+        assert (await api.get_tag("another tag")).exemplar is None
+        assert (await api.get_tag("tag")).exemplar == a.id
+        await api.set_tag_example("tag", b.id)
+        assert (await api.get_tag("tag")).exemplar == b.id
+        await api.clear_tag_example("tag")
+        assert (await api.get_tag("tag")).exemplar is None
+        await api.clear_tag_example("another tag")
+        assert (await api.get_tag("another tag")).exemplar is None
+
+
+@pytest.mark.asyncio
 async def test_tags(load_api, tmp_path, image_files):
     async with load_api() as api:
         assert await api.all_tags() == {}
@@ -2126,23 +2172,32 @@ async def test_tags(load_api, tmp_path, image_files):
                 await api.add_tag(tag, "illegal tag name")
 
         assert await api.all_tags() == {
-            "string": {"description": None, "children": {}},
-            "list": {"description": None, "children": {}},
+            "string": {"description": None, "exemplar": None, "children": {}},
+            "list": {"description": None, "exemplar": None, "children": {}},
             "nested": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "tag": {
                         "description": "a nested tag",
+                        "exemplar": None,
                         "children": {
-                            "further": {"description": None, "children": {}},
+                            "further": {
+                                "description": None,
+                                "exemplar": None,
+                                "children": {},
+                            },
                             "much": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "much": {
                                         "description": None,
+                                        "exemplar": None,
                                         "children": {
                                             "further": {
                                                 "description": "description 2",
+                                                "exemplar": None,
                                                 "children": {},
                                             },
                                         },
@@ -2165,25 +2220,35 @@ async def test_tags(load_api, tmp_path, image_files):
                 "string",
             ],
         )
+        await api.set_tag_example("nested/tag/much", id)  # will create tag
 
         await api.remove_tag("string")
         assert await api.all_tags() == {
-            "list": {"description": None, "children": {}},
+            "list": {"description": None, "exemplar": None, "children": {}},
             "nested": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "tag": {
                         "description": "a nested tag",
+                        "exemplar": None,
                         "children": {
-                            "further": {"description": None, "children": {}},
+                            "further": {
+                                "description": None,
+                                "exemplar": None,
+                                "children": {},
+                            },
                             "much": {
                                 "description": None,
+                                "exemplar": id,
                                 "children": {
                                     "much": {
                                         "description": None,
+                                        "exemplar": None,
                                         "children": {
                                             "further": {
                                                 "description": "description 2",
+                                                "exemplar": None,
                                                 "children": {},
                                             },
                                         },
@@ -2199,6 +2264,7 @@ async def test_tags(load_api, tmp_path, image_files):
             "list",
             "nested/tag",
             "nested/tag/further",
+            "nested/tag/much",
             "nested/tag/much/much/further",
         ]
         assert sorted((await api.get_image(id, tags=True)).tags) == [
@@ -2210,22 +2276,31 @@ async def test_tags(load_api, tmp_path, image_files):
         # should untag
         await api.remove_tag("nested/tag")
         assert await api.all_tags() == {
-            "list": {"description": None, "children": {}},
+            "list": {"description": None, "exemplar": None, "children": {}},
             "nested": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "tag": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
-                            "further": {"description": None, "children": {}},
+                            "further": {
+                                "description": None,
+                                "exemplar": None,
+                                "children": {},
+                            },
                             "much": {
                                 "description": None,
+                                "exemplar": id,
                                 "children": {
                                     "much": {
                                         "description": None,
+                                        "exemplar": None,
                                         "children": {
                                             "further": {
                                                 "description": "description 2",
+                                                "exemplar": None,
                                                 "children": {},
                                             },
                                         },
@@ -2244,13 +2319,21 @@ async def test_tags(load_api, tmp_path, image_files):
         # cascade should cascade, don't need to pick a tag in the db
         await api.remove_tag("nested/tag/much", cascade=True)
         assert await api.all_tags() == {
-            "list": {"description": None, "children": {}},
+            "list": {"description": None, "exemplar": None, "children": {}},
             "nested": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "tag": {
                         "description": None,
-                        "children": {"further": {"description": None, "children": {}}},
+                        "exemplar": None,
+                        "children": {
+                            "further": {
+                                "description": None,
+                                "exemplar": None,
+                                "children": {},
+                            }
+                        },
                     },
                 },
             },
@@ -2323,19 +2406,28 @@ async def test_move_tag(load_api, tmp_path, image_files):
         expected = {
             "alpha": {
                 "description": "ɑ",
+                "exemplar": None,
                 "children": {
                     "beta": {
                         "description": "β",
+                        "exemplar": None,
                         "children": {
-                            "charlie": {"description": "c", "children": {}},
+                            "charlie": {
+                                "description": "c",
+                                "exemplar": None,
+                                "children": {},
+                            },
                             "gamma": {
                                 "description": "ɣ",
+                                "exemplar": None,
                                 "children": {
                                     "delta": {
                                         "description": "δ",
+                                        "exemplar": None,
                                         "children": {
                                             "epsilon": {
                                                 "description": "ε",
+                                                "exemplar": None,
                                                 "children": {},
                                             },
                                         },
@@ -2346,26 +2438,39 @@ async def test_move_tag(load_api, tmp_path, image_files):
                     },
                     "bravo": {
                         "description": "b",
+                        "exemplar": None,
                         "children": {
                             # our tag was moved but this is implicit because children
                             "charlie": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "delta": {
                                         "description": "d",
+                                        "exemplar": None,
                                         "children": {
-                                            "echo": {"description": "e", "children": {}}
+                                            "echo": {
+                                                "description": "e",
+                                                "exemplar": None,
+                                                "children": {},
+                                            },
                                         },
                                     },
                                 },
                             },
                             "gamma": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "delta": {
                                         "description": None,
+                                        "exemplar": None,
                                         "children": {
-                                            "echo": {"description": "E", "children": {}}
+                                            "echo": {
+                                                "description": "E",
+                                                "exemplar": None,
+                                                "children": {},
+                                            },
                                         },
                                     },
                                 },
@@ -2402,33 +2507,45 @@ async def test_move_tag(load_api, tmp_path, image_files):
         expected = {
             "alpha": {
                 "description": "ɑ",
+                "exemplar": None,
                 "children": {
                     "beta": {
                         "description": "β",
+                        "exemplar": None,
                         "children": {
                             "charlie": {
                                 "description": "c",
+                                "exemplar": None,
                                 "children": {
                                     "delta": {
                                         "description": "d",
+                                        "exemplar": None,
                                         "children": {
-                                            "echo": {"description": "e", "children": {}}
+                                            "echo": {
+                                                "description": "e",
+                                                "exemplar": None,
+                                                "children": {},
+                                            },
                                         },
                                     },
                                 },
                             },
                             "gamma": {
                                 "description": "ɣ",
+                                "exemplar": None,
                                 "children": {
                                     "delta": {
                                         "description": "δ",
+                                        "exemplar": None,
                                         "children": {
                                             "echo": {
                                                 "description": "E",
+                                                "exemplar": None,
                                                 "children": {},
                                             },
                                             "epsilon": {
                                                 "description": "ε",
+                                                "exemplar": None,
                                                 "children": {},
                                             },
                                         },
@@ -2507,18 +2624,23 @@ async def test_move_tag(load_api, tmp_path, image_files):
         expected = {
             "alpha": {
                 "description": "a",
+                "exemplar": None,
                 "children": {
                     "bravo": {
                         "description": "ab",
+                        "exemplar": None,
                         "children": {
                             "alpha": {
                                 "description": "ababa",
+                                "exemplar": None,
                                 "children": {
                                     "bravo": {
                                         "description": "ababab",
+                                        "exemplar": None,
                                         "children": {
                                             "charlie": {
                                                 "description": "abababc",
+                                                "exemplar": None,
                                                 "children": {},
                                             },
                                         },
@@ -2577,30 +2699,39 @@ async def test_move_tag(load_api, tmp_path, image_files):
         expected = {
             "a": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "b": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
                             "a": {
                                 "description": "a",
+                                "exemplar": None,
                                 "children": {
                                     "b": {
                                         "description": "ab",
+                                        "exemplar": None,
                                         "children": {
                                             "a": {
                                                 "description": "aba",
+                                                "exemplar": None,
                                                 "children": {
                                                     "b": {
                                                         "description": "abab",
+                                                        "exemplar": None,
                                                         "children": {
                                                             "a": {
                                                                 "description": "ababa",
+                                                                "exemplar": None,
                                                                 "children": {
                                                                     "b": {
                                                                         "description": "ababab",  # noqa: E501
+                                                                        "exemplar": None,  # noqa: E501
                                                                         "children": {
                                                                             "c": {
                                                                                 "description": "abababc",  # noqa: E501
+                                                                                "exemplar": None,  # noqa: E501
                                                                                 "children": {},  # noqa: E501
                                                                             },
                                                                         },
@@ -2899,19 +3030,27 @@ async def test_import_export(load_api, tmp_path, image_files):
             await api.import_data(path)
 
             await api.all_tags() == {
-                "dogs": {"description": "dogs are cool", "children": {}},
-                "other": {"description": None, "children": {}},
+                "dogs": {
+                    "description": "dogs are cool",
+                    "exemplar": None,
+                    "children": {},
+                },
+                "other": {"description": None, "exemplar": None, "children": {}},
                 "tag": {
                     "description": "a tag",
+                    "exemplar": None,
                     "children": {
                         "that": {
                             "description": None,
+                            "exemplar": None,
                             "children": {
                                 "is": {
                                     "description": None,
+                                    "exemplar": None,
                                     "children": {
                                         "nested": {
                                             "description": "another tag",
+                                            "exemplar": None,
                                             "children": {},
                                         },
                                     },

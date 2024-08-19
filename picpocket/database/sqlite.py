@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 """Support for using SQLite as a backend"""
+
 import logging
 import re
+import sqlite3
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from shutil import copy2
 from typing import Optional
 
 import aiosqlite
-from aiosqlite import Connection
+from aiosqlite import Connection, Cursor
 
 from picpocket.api import CredentialType
 from picpocket.configuration import Configuration
@@ -19,7 +23,9 @@ from picpocket.version import Version
 
 LOGGER = logging.getLogger("picpocket.sqlite")
 
-SCHEMA_FILE = Path(__file__).absolute().parent / "sqlite_schema.sql"
+SCHEMA_DIRECTORY = Path(__file__).absolute().parent / "schema" / "sqlite"
+MIGRATION_DIRECTORY = SCHEMA_DIRECTORY / "migrations"
+SCHEMA_FILE = SCHEMA_DIRECTORY / "schema.sql"
 
 DEFAULT_FILENAME = "picpocket.sqlite3"
 
@@ -50,7 +56,6 @@ class SqliteSQL(SQL):
 class Sqlite(DbApi):
     """DbApi implementation for SQLite"""
 
-    BACKEND_NAME = "sqlite"
     CREDENTIAL_TYPE = CredentialType.NONE
 
     TASKS_TABLE = {
@@ -107,6 +112,14 @@ class Sqlite(DbApi):
         self._configuration = configuration
         self._mounts: dict[int, Path] = {}
         self._sql = SqliteSQL()
+
+    @property
+    def name(self) -> str:
+        return "sqlite"
+
+    @property
+    def migration_directory(self) -> Path:
+        return MIGRATION_DIRECTORY
 
     @property
     def configuration(self) -> Configuration:
@@ -172,7 +185,7 @@ class Sqlite(DbApi):
 
     async def connect(self, should_exist: Optional[bool] = True) -> Connection:
         backend_info = self.configuration.contents["backend"]
-        if backend_info["type"] != self.BACKEND_NAME:
+        if backend_info["type"] != self.name:
             raise ValueError(f"Wrong backend! {backend_info['type']}")
 
         pathstr = backend_info.get("connection", {})["path"]
@@ -191,8 +204,49 @@ class Sqlite(DbApi):
 
     async def initialize(self):
         LOGGER.debug("Creating tables")
-        async with await self.connect(should_exist=False) as connection:
-            cursor = await connection.executescript(SCHEMA_FILE.read_text())
+
+        async with (
+            await self.connect(should_exist=False) as connection,
+            self.cursor(connection, commit=True) as cursor,
+        ):
+            await self.load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
+
+            LOGGER.debug("committing database")
+
+    def backend_api_version(self) -> Version:
+        return SCHEMA_VERSION
+
+    async def backend_schema_version(self) -> Version:
+        async with (
+            await self.connect() as connection,
+            self.cursor(connection) as cursor,
+        ):
+            return await self._backend_schema_version(cursor)
+
+    async def _backend_schema_version(self, cursor: Cursor) -> Version:
+        await cursor.execute(
+            """
+            SELECT major, minor, patch, label
+            FROM version
+            ORDER BY id DESC LIMIT 1;
+            """
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            raise ValueError("Unknown database version")
+
+        return Version(*row)
+
+    async def load_schema(
+        self,
+        cursor: Cursor,
+        path: Path,
+        version: Optional[Version] = None,
+    ):
+        await cursor.executescript(path.read_text())
+
+        if version:
             await cursor.execute(
                 """
                 INSERT INTO VERSION (major, minor, patch, label)
@@ -201,58 +255,77 @@ class Sqlite(DbApi):
                 SCHEMA_VERSION,
             )
 
-            LOGGER.debug("committing database")
-            await connection.commit()
-            await cursor.close()
+    async def create_backup(self, path: Path) -> Path:
+        """Backup PicPocket data
 
-    def get_api_version(self) -> Version:
-        return SCHEMA_VERSION
+        Create a backup of PicPocket's backend (locations, tasks, image
+        info, tags).
 
-    async def get_version(self) -> Version:
-        async with (
-            await self.connect() as connection,
-            self.cursor(connection) as cursor,
-        ):
-            await cursor.execute(
-                """
-                SELECT major, minor, patch, label
-                FROM version
-                ORDER BY id DESC LIMIT 1;
-                """
+        Returns:
+            The path to the generated backup file.
+
+        .. note::
+            Unlike `export_data`, this stores the data in a
+            backend-specific way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
+
+        .. note::
+            `create_backup` may not be implemented for all backends.
+
+        .. warning::
+            This file will not contain the images themselves, just the
+            metadata you've created for the image (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The directory to save the backup to. The format of
+                the resulting backup is backend-specific. With the
+                (default) SQLite backend, the backup will be a copy of
+                the existing DB file. If the supplied path is an
+                existing directory, it will be saved to a file with the
+                name picpocket-<VERSION>-<DATE>.sqlite
+        """
+        db_file = Path(self.configuration.contents["backend"]["connection"]["path"])
+        if not db_file.is_absolute():
+            db_file = self.configuration.directory / db_file
+
+        if path.is_dir() or not path.suffix:
+            api_version = self.api_version()
+            schema_version = await self.backend_schema_version()
+
+            path = path / (
+                f"picpocket-{api_version}-"
+                f"{schema_version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sqlite"
             )
-            row = await cursor.fetchone()
 
-            if not row:
-                raise ValueError("Unknown database version")
+        path.parent.mkdir(exist_ok=True, parents=True)
 
-            return Version(*row)
+        LOGGER.info("Copying DB to %s", path)
+        copy2(db_file, path)
 
-    async def matching_version(self) -> bool:
-        async with (
-            await self.connect() as connection,
-            connection.cursor() as cursor,
-        ):
-            try:
-                await cursor.execute(
-                    """
-                    SELECT major, minor, patch, label
-                    FROM version
-                    ORDER BY id DESC LIMIT 1;
-                    """
-                )
-                row = await cursor.fetchone()
-            except Exception:
-                logging.exception("Checking version failed")
-                await connection.rollback()
-                return False
+        return path
 
-            if not row:
-                LOGGER.error("Database doesn't contain version info")
-                return False
+    async def restore_backup(self, path: Path):
+        if not path.is_file():
+            logging.error("Attempting to restore non-existent file: %s", path)
+            raise IOError(f"Missing file: {path}")
 
-            version = Version(*row)
+        try:
+            connection = sqlite3.connect(path)
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM version ORDER BY id DESC LIMIT 1;")
+            cursor.fetchone()
+        except Exception:
+            logging.exception("Attempting to load the database failed. Aborting")
+            raise
 
-            return version == SCHEMA_VERSION
+        db_file = Path(self.configuration.contents["backend"]["connection"]["path"])
+        if not db_file.is_absolute():
+            db_file = self.configuration.directory / db_file
+
+        copy2(path, db_file)
 
 
 __all__ = (

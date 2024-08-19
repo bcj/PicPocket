@@ -1,4 +1,4 @@
-include picpocket/database/*.sql
+include picpocket/database/schema/*/*.sql
 include picpocket/web/scripts/dialog.applescript
 include picpocket/web/templates/*.css
 include picpocket/web/templates/*.js

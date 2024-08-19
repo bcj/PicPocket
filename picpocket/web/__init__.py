@@ -5,6 +5,7 @@
     represents a minimal version that is usable enough to test how the
     rest of PicPocket works in pracice
 """
+
 from __future__ import annotations
 
 import asyncio

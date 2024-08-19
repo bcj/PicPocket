@@ -168,15 +168,18 @@ class Tag:
     name: str
     description: Optional[str]
     children: frozenset[str] = field(compare=False)
+    exemplar: Optional[int]
 
     def __init__(
         self,
         name: str,
         description: Optional[str] = None,
         children: Optional[Iterable[str]] = None,
+        exemplar: Optional[int] = None,
     ):
         self.name = name
         self.description = description
+        self.exemplar = exemplar
 
         if children:
             self.children = frozenset(children)
@@ -188,6 +191,7 @@ class Tag:
             "name": self.name,
             "description": self.description,
             "children": sorted(self.children),
+            "exemplar": self.exemplar,
         }
 
 

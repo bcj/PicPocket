@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 """Support for using PostgreSQL as a backend"""
+
 import logging
 import re
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from subprocess import check_call
 from typing import Any, Iterable, Optional
 
 import psycopg
 import psycopg.sql
-from psycopg import AsyncConnection
-from psycopg.errors import UndefinedTable
+from psycopg import AsyncClientCursor, AsyncConnection
 
 from picpocket.api import CredentialType
 from picpocket.configuration import Configuration
@@ -21,8 +23,10 @@ from picpocket.version import Version
 
 LOGGER = logging.getLogger("picpocket.postgres")
 
-TYPES_FILE = Path(__file__).absolute().parent / "postgres_types.sql"
-SCHEMA_FILE = TYPES_FILE.parent / "postgres_schema.sql"
+SCHEMA_DIRECTORY = Path(__file__).absolute().parent / "schema" / "postgres"
+MIGRATION_DIRECTORY = SCHEMA_DIRECTORY / "migrations"
+TYPES_FILE = SCHEMA_DIRECTORY / "types.sql"
+SCHEMA_FILE = SCHEMA_DIRECTORY / "schema.sql"
 
 
 class PostgreSQL(SQL):
@@ -71,7 +75,6 @@ class PostgreSQL(SQL):
 class Postgres(DbApi):
     """DbApi implementation for PostgreSQL"""
 
-    BACKEND_NAME = "postgres"
     CREDENTIAL_TYPE = CredentialType.PASSWORD
     TEXT_COMPARATORS = {
         Comparator.EQUALS,
@@ -90,6 +93,14 @@ class Postgres(DbApi):
         self._configuration = configuration
         self._mounts: dict[int, Path] = {}
         self._sql = PostgreSQL()
+
+    @property
+    def name(self) -> str:
+        return "postgres"
+
+    @property
+    def migration_directory(self) -> Path:
+        return MIGRATION_DIRECTORY
 
     @property
     def configuration(self) -> Configuration:
@@ -163,7 +174,7 @@ class Postgres(DbApi):
 
     async def connect(self) -> AsyncConnection:
         backend_info = self.configuration.contents["backend"]
-        if backend_info["type"] != self.BACKEND_NAME:
+        if backend_info["type"] != self.name:
             raise ValueError(f"Wrong backend! {backend_info['type']}")
 
         info = backend_info["connection"]
@@ -176,7 +187,7 @@ class Postgres(DbApi):
     async def initialize(self):
         async with (
             await self.connect() as connection,
-            psycopg.AsyncClientCursor(connection) as cursor,
+            self.cursor(connection, commit=True) as cursor,
         ):
             LOGGER.debug("confirming tables don't already exist")
             existing = set()
@@ -195,67 +206,148 @@ class Postgres(DbApi):
                 )
 
             LOGGER.debug("Creating types")
-            await cursor.execute(TYPES_FILE.read_text())
+            await self.load_schema(cursor, TYPES_FILE)
             LOGGER.debug("Creating tables")
-            await cursor.execute(SCHEMA_FILE.read_text())
-
-            await cursor.execute(
-                "INSERT INTO VERSION (version) VALUES (%s);", (SCHEMA_VERSION,)
-            )
+            await self.load_schema(cursor, SCHEMA_FILE, version=SCHEMA_VERSION)
 
             LOGGER.debug("committing database")
-            await connection.commit()
 
-    def get_api_version(self) -> Version:
+    def backend_api_version(self) -> Version:
         return SCHEMA_VERSION
 
-    async def get_version(self) -> Version:
+    async def backend_schema_version(self) -> Version:
         async with (
             await self.connect() as connection,
             self.cursor(connection) as cursor,
         ):
+            return await self._backend_schema_version(cursor)
+
+    async def _backend_schema_version(self, cursor: AsyncClientCursor) -> Version:
+        await cursor.execute(
+            """
+            SELECT
+            (version).major, (version).minor, (version).patch, (version).label
+            FROM version
+            ORDER BY id DESC LIMIT 1;
+            """
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            raise ValueError("Unknown database version")
+
+        return Version(*row)
+
+    async def load_schema(
+        self,
+        cursor: AsyncClientCursor,
+        path: Path,
+        version: Optional[Version] = None,
+    ):
+        await cursor.execute(path.read_text())
+
+        if version:
             await cursor.execute(
-                """
-                SELECT
-                (version).major, (version).minor, (version).patch, (version).label
-                FROM version
-                ORDER BY id DESC LIMIT 1;
-                """
+                "INSERT INTO VERSION (version) VALUES (%s);", (version,)
             )
-            row = await cursor.fetchone()
 
-            if not row:
-                raise ValueError("Unknown database version")
+    async def create_backup(self, path: Path) -> Path:
+        """Backup PicPocket data
 
-            return Version(*row)
+        Create a backup of PicPocket's backend (locations, tasks, image
+        info, tags).
 
-    # TODO (1.0) actually check version on load
-    async def matching_version(self) -> bool:
-        async with (
-            await self.connect() as connection,
-            self.cursor(connection) as cursor,
-        ):
-            try:
-                await cursor.execute(
-                    """
-                    SELECT
-                    (version).major, (version).minor, (version).patch, (version).label
-                    FROM version
-                    ORDER BY id DESC LIMIT 1;
-                    """
-                )
-                rows = await cursor.fetchall()
-            except UndefinedTable:
-                LOGGER.exception("version table doesn't exist")
-                return False
+        Returns:
+            The path to the generated backup file.
 
-            if not len(rows):
-                LOGGER.error("Database doesn't contain version info")
-                return False
+        .. note::
+            Unlike `export_data`, this stores the data in a
+            backend-specific way. `create_backup` will create a file
+            that is (probably) smaller and (probably) quicker to restore
+            than `export_data` but will only be usable by the current
+            backend.
 
-            version = Version(*rows[0])
+        .. note::
+            `create_backup` may not be implemented for all backends.
 
-            return version == SCHEMA_VERSION
+        .. warning::
+            This file will not contain the images themselves, just the
+            metadata you've created for the image (tags, captions,
+            alt text, etc.).
+
+        Args:
+            path: The directory to save the backup to. The format of
+                the resulting backup is backend-specific. With the
+                Postgres backend, the backup will be created using
+                `pg_dump`' default format. If the supplied path is
+                an existing directory, it will be saved to a
+                subdirectory with the name picpocket-<VERSION>-<DATE>.sql
+        """
+        if path.is_dir():
+            api_version = self.api_version()
+            schema_version = await self.backend_schema_version()
+
+            path = path / (
+                f"picpocket-{api_version}-"
+                f"{schema_version}-{datetime.now():%Y-%m-%d-%H-%M-%S}.sql"
+            )
+
+        path.parent.mkdir(exist_ok=True, parents=True)
+
+        connection_info = self.configuration.contents["backend"]["connection"]
+
+        command = [
+            "pg_dump",
+            "--file",
+            str(path),
+            "--dbname",
+            connection_info["dbname"],
+            "--host",
+            connection_info["host"],
+            "--port",
+            str(connection_info["port"]),
+            "--username",
+            connection_info["user"],
+        ]
+
+        if connection_info["password"]:
+            command.extend(("--password", connection_info["password"]))
+        else:
+            command.append("--no-password")
+
+        check_call(command)
+
+        return path
+
+    async def restore_backup(self, path: Path):
+        if not path.is_file():
+            logging.error("Attempting to restore non-existent file: %s", path)
+            raise IOError(f"Missing file: {path}")
+
+        connection_info = self.configuration.contents["backend"]["connection"]
+
+        command = [
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "--file",
+            str(path),
+            "--dbname",
+            connection_info["dbname"],
+            "--host",
+            connection_info["host"],
+            "--port",
+            str(connection_info["port"]),
+            "--username",
+            connection_info["user"],
+        ]
+
+        if connection_info["password"]:
+            command.extend(("--password", connection_info["password"]))
+        else:
+            command.append("--no-password")
+
+        check_call(command)
 
 
 def _get_types() -> set[str]:

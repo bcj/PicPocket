@@ -99,9 +99,10 @@ async def _initialize(backend, wipe_db, connection_info, tmp_path):
 async def test_load(create_configuration):
     from picpocket import APIS, load
 
-    backend_type = APIS[os.environ["PICPOCKET_BACKEND"]]
+    backend_name = os.environ.get("PICPOCKET_BACKEND", "sqlite")
+    backend_type = APIS[backend_name]
 
-    async with create_configuration(backend=backend_type.BACKEND_NAME) as configuration:
+    async with create_configuration(backend=backend_name) as configuration:
         api = load(configuration.directory)
         assert isinstance(api, backend_type)
 

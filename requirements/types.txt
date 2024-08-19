@@ -1,2 +1,3 @@
 mypy
 types-requests
+types-Send2Trash

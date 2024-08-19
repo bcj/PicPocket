@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, AsyncContextManager, AsyncGenerator, Optional, cast
 from uuid import uuid4
 
+from send2trash import send2trash
+
 from picpocket.api import NULL_SYMBOL, PicPocket
 from picpocket.database.logic import (
     SQL,
@@ -32,7 +34,7 @@ from picpocket.errors import (
 from picpocket.images import hash_image, image_info
 from picpocket.internal_use import NotSupplied
 from picpocket.tasks import PathPart, load_path
-from picpocket.version import VERSION
+from picpocket.version import VERSION, Version
 
 EXPIRATION = timedelta(days=1)
 
@@ -41,9 +43,8 @@ class DbApi(PicPocket, ABC):
     """A DBAPI 2.0 Implementation of PicPocket
 
     This class implements all required to support the PicPocket protocol
-    other than the configuration and mounts properties and the
-    parse_connection_info, initialize, get_api_version, get_version, and
-    matching_version methods
+    other than the configuration and mounts properties and the methods
+    specific to the specific database being used.
 
     To add support for a new database you need to implement those
     methods yourself as well as some new methods related to getting
@@ -127,6 +128,16 @@ class DbApi(PicPocket, ABC):
 
     @property
     @abstractmethod
+    def name(self) -> str:
+        """The name of the backend"""
+
+    @property
+    @abstractmethod
+    def migration_directory(self) -> Path:
+        """The path to the migration files"""
+
+    @property
+    @abstractmethod
     def sql(self) -> SQL:
         """The sql object to use when dynamically generating sql.
 
@@ -162,6 +173,96 @@ class DbApi(PicPocket, ABC):
         cursor needs to run a pragma to enable this and we don't want to
         do that on every single cursor creation.
         """
+
+    def api_version(self) -> Version:
+        return VERSION
+
+    @abstractmethod
+    async def backend_schema_version(self) -> Version:
+        """Get the database's schema version
+
+        Returns:
+            The actual version of the backend database schema
+        """
+
+    # Forcing a version that takes an existing cursor allows us to do
+    # multiple migrations without committing.
+    @abstractmethod
+    async def _backend_schema_version(self, cursor) -> Version:
+        """Get the database's schema version
+
+        Args:
+            cursor: A database cursor
+
+        Returns:
+            The actual version of the backend database schema
+        """
+
+    async def compatible_backend(self) -> bool:
+        compatible = False
+
+        if self.configuration.contents["backend"]["type"] == self.name:
+            expected = self.backend_api_version()
+
+            try:
+                actual = await self.backend_schema_version()
+            except Exception:
+                logging.exception("Failed to fetch backend schema version")
+            else:
+                compatible = expected == actual
+
+        return compatible
+
+    async def upgrade_backend(self, path: Optional[Path]) -> Optional[Path]:
+        backup = None
+
+        if path:
+            backup = await self.create_backup(path)
+
+        migration_directory = self.migration_directory
+
+        destination = self.backend_api_version()
+
+        async with (
+            await self.connect() as connection,
+            self.cursor(connection, commit=True) as cursor,
+        ):
+            previous = None
+
+            while (
+                current := await self._backend_schema_version(cursor)
+            ) != destination:
+                if current == previous:
+                    raise ValueError(f"Failed to upgrade from {current}")
+
+                migration_file = migration_directory / f"{current}_up.sql"
+
+                if not migration_file.exists():
+                    raise ValueError(f"No way to upgrade from {current}")
+
+                self.logger.info("Updating backend from %s", current)
+                try:
+                    await self.load_schema(cursor, migration_file)
+                except Exception:
+                    self.logger.exception("Migration failed")
+                    raise
+
+                previous = current
+
+            return backup
+
+    @abstractmethod
+    async def load_schema(self, cursor, path: Path, version: Optional[Version] = None):
+        """Load a schema or migration file into the database
+
+        Args:
+            cursor: A database cursor
+            path: The schema to apply to the database
+            version: If supplied, a version to add to the version table
+        """
+
+    async def create_backup(self, path: Path) -> Path:
+        raise NotImplementedError("Backups unsupported for this backend")
 
     async def import_data(
         self,
@@ -1871,7 +1972,7 @@ class DbApi(PicPocket, ABC):
 
                 path = root / pathstr
                 if path.exists():
-                    path.unlink()
+                    send2trash(path)
 
     async def find_image(self, path: Path, tags: bool = False) -> Optional[Image]:
         path = path.absolute()
@@ -2677,15 +2778,20 @@ class DbApi(PicPocket, ABC):
             self.cursor(connection, commit=True) as cursor,
         ):
             description = None
+            exemplar = None
             kids: set[str] = set()
 
             await cursor.execute(
-                f"SELECT description FROM tags WHERE name = {self.sql.param};",
+                f"""
+                SELECT description, exemplar
+                FROM tags WHERE name = {self.sql.param};
+                """,
                 (serialized,),
             )
             row = await cursor.fetchone()
             if row:
                 description = row[0]
+                exemplar = row[1]
 
             if children:
                 serialized = f"{escape(serialized, self.sql.escape)}_%"
@@ -2702,7 +2808,40 @@ class DbApi(PicPocket, ABC):
                 for (serialized,) in await cursor.fetchall():
                     kids.add(deserialize_tag(serialized)[ignore:].split("/", 1)[0])
 
-            return Tag(tag, description, kids)
+            return Tag(tag, description, kids, exemplar)
+
+    async def set_tag_example(self, tag: str, image: int):
+        serialized = serialize_tag(tag)
+
+        async with (
+            await self.connect() as connection,
+            self.cursor(connection, commit=True) as cursor,
+        ):
+            await self._add_tag(cursor, tag)
+            await cursor.execute(
+                f"""
+                UPDATE tags
+                SET exemplar = {self.sql.param}
+                WHERE name = {self.sql.param};
+                """,
+                (image, serialized),
+            )
+
+    async def clear_tag_example(self, tag: str):
+        serialized = serialize_tag(tag)
+
+        async with (
+            await self.connect() as connection,
+            self.cursor(connection, commit=True) as cursor,
+        ):
+            await cursor.execute(
+                f"""
+                UPDATE tags
+                SET exemplar = NULL
+                WHERE name = {self.sql.param};
+                """,
+                (serialized,),
+            )
 
     async def all_tag_names(self) -> set[str]:
         async with (
@@ -2721,20 +2860,29 @@ class DbApi(PicPocket, ABC):
             await self.connect() as connection,
             self.cursor(connection) as cursor,
         ):
-            await cursor.execute("SELECT name, description FROM tags;")
-            for serialized, description in await cursor.fetchall():
+            await cursor.execute("SELECT name, description, exemplar FROM tags;")
+            for serialized, description, exemplar in await cursor.fetchall():
                 current = tags
                 *parents, name = deserialize_tag(serialized).split("/")
                 for part in parents:
                     if part not in current:
-                        current[part] = {"description": None, "children": {}}
+                        current[part] = {
+                            "description": None,
+                            "exemplar": None,
+                            "children": {},
+                        }
 
                     current = current[part]["children"]
 
                 if name in current:
                     current[name]["description"] = description
+                    current[name]["exemplar"] = exemplar
                 else:
-                    current[name] = {"description": description, "children": {}}
+                    current[name] = {
+                        "description": description,
+                        "exemplar": exemplar,
+                        "children": {},
+                    }
 
         return tags
 

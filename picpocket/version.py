@@ -7,6 +7,7 @@ the frontend API and will at least largely be following SemVer.
 The plan is to keep the DB and the REST API major versions in line with
 the package version.
 """
+
 from typing import NamedTuple, Optional
 
 
@@ -33,9 +34,9 @@ class Version(NamedTuple):
         return version
 
 
-VERSION = Version(0, 1, 0)
-POSTGRES_VERSION = Version(0, 1, 0)
-SQLITE_VERSION = Version(0, 1, 0)
+VERSION = Version(0, 2, 0, "dev")
+POSTGRES_VERSION = Version(0, 2, 0, "dev")
+SQLITE_VERSION = Version(0, 2, 0, "dev")
 WEB_VERSION = Version(0, 1, 0)
 
 __version__ = str(VERSION)

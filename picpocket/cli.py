@@ -1,4 +1,5 @@
 """Run PicPocket from the command line"""
+
 import asyncio
 import json
 import logging
@@ -100,7 +101,7 @@ def main(
             runner.run(initialize(args.directory, args.backend, **kwargs))
         else:
             match args.command:
-                case "import" | "export" | "web":
+                case "upgrade" | "backup" | "restore" | "import" | "export" | "web":
                     function = run_meta
                 case "location":
                     function = run_location
@@ -306,6 +307,36 @@ def build_meta(action) -> list[ArgumentParser]:
         ),
     )
 
+    upgrader = action.add_parser("upgrade", description="Upgrade the PicPocket backend")
+    upgrader_location_group = upgrader.add_mutually_exclusive_group()
+    upgrader_location_group.add_argument(
+        "--path",
+        default=Path.cwd(),
+        type=Path,
+        help="Where to save the backup file",
+    )
+    upgrader_location_group.add_argument(
+        "--no-backup",
+        dest="path",
+        action="store_const",
+        const=None,
+        help="Don't back up the database before upgrading",
+    )
+
+    backuper = action.add_parser("backup", description="Back up the PicPocket backend")
+    backuper.add_argument(
+        "path",
+        nargs="?",
+        default=Path.cwd(),
+        type=Path,
+        help="Where to save the backup file",
+    )
+
+    restorer = action.add_parser(
+        "restore", description="Restor a backup of the PicPocket backend"
+    )
+    restorer.add_argument("path", type=Path, help="The backup to restore")
+
     importer = action.add_parser("import", description="Import a PicPocket backup")
     importer.add_argument("path", type=full_path, help="The backup to import")
     importer_locations_group = importer.add_mutually_exclusive_group()
@@ -325,7 +356,7 @@ def build_meta(action) -> list[ArgumentParser]:
     exporter.add_argument("path", type=full_path, help="where to save the backup")
     exporter.add_argument("--locations", nargs="*", help="Only export these locations")
 
-    return [web, importer, exporter]
+    return [web, upgrader, backuper, restorer, importer, exporter]
 
 
 async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
@@ -347,6 +378,31 @@ async def run_meta(picpocket: PicPocket, args: Namespace, print=print):
                 )
             except KeyboardInterrupt:
                 print("shutting down")
+        case "upgrade":
+            try:
+                backup = await picpocket.upgrade_backend(path=args.path)
+            except Exception:
+                print("Upgrading database failed")
+                raise
+            else:
+                print("Upgrade complete")
+
+                if backup:
+                    print(f"Backup of previous version saved to: {backup}")
+        case "backup":
+            try:
+                backup = await picpocket.create_backup(args.path)
+            except NotImplementedError:
+                print("Backups not supported for the current backend")
+                exit(1)
+            else:
+                print(f"Backup saved to {backup}")
+        case "restore":
+            try:
+                await picpocket.restore_backup(args.path)
+            except NotImplementedError:
+                print("Restoring backups not supported for the current backend")
+                exit(1)
         case "import":
             if args.locations:
                 if isinstance(args.locations[0], list):
@@ -1698,7 +1754,19 @@ def build_tags(action) -> list[ArgumentParser]:
         help="Output tags as json",
     )
 
-    return [add, move, remove, listing]
+    set_example = subparsers.add_parser(
+        "set",
+        help="Set an example image for a tag",
+    )
+    set_example.add_argument("name", help="The name of the tag")
+    set_example.add_argument("image", type=int, help="The image ID")
+
+    clear_example = subparsers.add_parser(
+        "clear", help="Clear the example image for a tag"
+    )
+    clear_example.add_argument("name", help="The name of the tag")
+
+    return [add, move, remove, listing, set_example, clear_example]
 
 
 async def run_tag(picpocket: PicPocket, args: Namespace, print=print):
@@ -1722,6 +1790,12 @@ async def run_tag(picpocket: PicPocket, args: Namespace, print=print):
             else:
                 for tag in sorted(tags):
                     print_tags(tags, print=print)
+        case "set":
+            await picpocket.set_tag_example(args.name, args.image)
+            print(f"example image set for tag {args.name}")
+        case "clear":
+            await picpocket.clear_tag_example(args.name)
+            print(f"example image cleared for tag {args.name}")
         case _:
             raise NotImplementedError(
                 f"Command 'tag {args.subcommand}' not implemented"
@@ -1776,6 +1850,9 @@ def print_tags(tags: dict, print=print, parents=""):
         line = name
         if value["description"]:
             line = f"{line}: {value['description']}"
+
+        if value["exemplar"]:
+            line = f"{line} (see {value['exemplar']})"
 
         print(line)
         print_tags(value["children"], print=print, parents=name)

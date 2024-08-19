@@ -1,4 +1,5 @@
 """Run an interactive test server using a temporary configuration"""
+
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

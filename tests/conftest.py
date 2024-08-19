@@ -311,7 +311,7 @@ def _wipe(connection_info):
         for table in _get_tables():
             # TODO: does psycopg.sql.SQL & .Identifier not work here?
             # in the mean time do a quick check on custom_type
-            re.search(r"^[a-z0-9_]+$", table)
+            assert re.search(r"^[a-z0-9_]+$", table)
 
             cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
 
@@ -319,7 +319,7 @@ def _wipe(connection_info):
         for custom_type in _get_types():
             # TODO: does psycopg.sql.SQL & .Identifier not work here?
             # in the mean time do a quick check on custom_type
-            re.search(r"^[a-z0-9_]+$", custom_type)
+            assert re.search(r"^[a-z0-9_]+$", custom_type)
 
             cursor.execute(f"DROP TYPE IF EXISTS {custom_type} CASCADE;")
 
@@ -347,3 +347,14 @@ async def _wipe_async(connection):
             await cursor.execute(f"DROP TYPE IF EXISTS {custom_type} CASCADE;")
 
     await connection.commit()
+
+
+def matching_dumps(a: Path, b: Path, backend: str):
+    if backend == "postgres":
+        assert strip_dump_header(a) == strip_dump_header(b)
+    else:
+        assert a.read_bytes() == b.read_bytes()
+
+
+def strip_dump_header(backup: Path) -> bytes:
+    return b"\n".join(backup.read_bytes().splitlines()[7:])

@@ -1,4 +1,5 @@
 """Utilities related to PicPocket tasks"""
+
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

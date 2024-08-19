@@ -3,6 +3,7 @@
 .. todo::
     break up run tests into individual subcommands
 """
+
 import json
 import logging
 import os
@@ -12,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+VERSIONS_DIRECTORY = Path(__file__).parent / "versions"
 
 
 class Printer:
@@ -117,7 +120,7 @@ def test_build_meta(create_parser):
     # from prog.
     prelude = len(parser.prog) + 1
     commands = {subparser.prog[prelude:] for subparser in build_meta(subparsers)}
-    assert commands == {"web", "import", "export"}
+    assert commands == {"web", "upgrade", "backup", "restore", "import", "export"}
 
     # web
     args = parser.parse_args(["web", "--local-actions"])
@@ -146,6 +149,36 @@ def test_build_meta(create_parser):
         local_actions=False,
         suggestions=3,
         suggestion_lookback=4,
+    )
+
+    # upgrade
+    args = parser.parse_args(["upgrade"])
+    assert args == Namespace(command="upgrade", path=Path.cwd())
+
+    args = parser.parse_args(["upgrade", "--path", "path/to/file.sqlite"])
+    assert args == Namespace(command="upgrade", path=Path("path/to/file.sqlite"))
+
+    args = parser.parse_args(["upgrade", "--no-backup"])
+    assert args == Namespace(command="upgrade", path=None)
+
+    with pytest.raises(BaseException):
+        parser.parse_args(["upgrade", "--path", "path/to/file.sqlite", "--no-backup"])
+
+    # backup
+    args = parser.parse_args(["backup"])
+    assert args == Namespace(command="backup", path=Path.cwd())
+
+    args = parser.parse_args(["backup", "path/to/file.sqlite"])
+    assert args == Namespace(
+        command="backup",
+        path=Path("path") / "to" / "file.sqlite",
+    )
+
+    # restore
+    args = parser.parse_args(["restore", "path/to/file.sqlite"])
+    assert args == Namespace(
+        command="restore",
+        path=Path("path") / "to" / "file.sqlite",
     )
 
     # import
@@ -1240,6 +1273,8 @@ def test_build_tags(create_parser):
         "tag move",
         "tag remove",
         "tag list",
+        "tag set",
+        "tag clear",
     }
 
     # add
@@ -1314,6 +1349,23 @@ def test_build_tags(create_parser):
         command="tag",
         subcommand="list",
         output=Output.JSON,
+    )
+
+    # set
+    args = parser.parse_args(["tag", "set", "abc/def", "1"])
+    assert args == Namespace(
+        command="tag",
+        subcommand="set",
+        name="abc/def",
+        image=1,
+    )
+
+    # clear
+    args = parser.parse_args(["tag", "clear", "abc/def"])
+    assert args == Namespace(
+        command="tag",
+        subcommand="clear",
+        name="abc/def",
     )
 
 
@@ -1450,6 +1502,7 @@ def test_parse_cli(tmp_path):
 @pytest.mark.asyncio
 async def test_run_meta(load_api, tmp_path, image_files):
     from picpocket.cli import run_meta
+    from tests.conftest import _wipe, matching_dumps
 
     def compare_json_files(a: Path, b: Path):
         with a.open() as stream:
@@ -1489,34 +1542,34 @@ async def test_run_meta(load_api, tmp_path, image_files):
         await picpocket.import_location(id)
         await picpocket.unmount(id)
 
-        api_backup = tmp_path / "api.json"
-        cli_backup = tmp_path / "cli.json"
+        api_export = tmp_path / "api.json"
+        cli_export = tmp_path / "cli.json"
 
         # only some locations
-        await picpocket.export_data(api_backup, locations=["main", "portable"])
+        await picpocket.export_data(api_export, locations=["main", "portable"])
         await run_meta(
             picpocket,
             Namespace(
                 command="export",
-                path=cli_backup,
+                path=cli_export,
                 locations=["main", "portable"],
             ),
             print=printer.print,
         )
-        compare_json_files(api_backup, cli_backup)
+        compare_json_files(api_export, cli_export)
 
         # full backup
-        await picpocket.export_data(api_backup)
+        await picpocket.export_data(api_export)
         await run_meta(
             picpocket,
             Namespace(
                 command="export",
-                path=cli_backup,
+                path=cli_export,
                 locations=None,
             ),
             print=printer.print,
         )
-        compare_json_files(api_backup, cli_backup)
+        compare_json_files(api_export, cli_export)
 
     # partial import
     async with load_api() as picpocket:
@@ -1524,7 +1577,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
             picpocket,
             Namespace(
                 command="import",
-                path=cli_backup,
+                path=cli_export,
                 locations=["main"],
             ),
             print=printer.print,
@@ -1542,7 +1595,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
             picpocket,
             Namespace(
                 command="import",
-                path=cli_backup,
+                path=cli_export,
                 locations=None,
             ),
             print=printer.print,
@@ -1556,7 +1609,7 @@ async def test_run_meta(load_api, tmp_path, image_files):
             picpocket,
             Namespace(
                 command="import",
-                path=cli_backup,
+                path=cli_export,
                 locations=[["portable", str(portable)]],
             ),
             print=printer.print,
@@ -1564,7 +1617,71 @@ async def test_run_meta(load_api, tmp_path, image_files):
         assert len(await picpocket.list_locations()) == 1
         assert await picpocket.count_images() == 2
 
-        # unknown command
+    backend = os.environ.get("PICPOCKET_BACKEND", "sqlite")
+
+    # backup/restore
+    async with load_api() as picpocket:
+        id = await picpocket.add_location("main", main, destination=True)
+        await picpocket.import_location(id)
+
+        id = await picpocket.add_location("other", other, destination=True)
+        await picpocket.import_location(id)
+
+        id = await picpocket.add_location("portable", destination=True)
+        await picpocket.mount(id, portable)
+        await picpocket.import_location(id)
+        await picpocket.unmount(id)
+
+        # TODO: this will break if/when we switch Postgres to directory backups
+        cli_backup = tmp_path / "cli.backup"
+        api_backup = tmp_path / "api.backup"
+
+        await run_meta(
+            picpocket,
+            Namespace(command="backup", path=cli_backup),
+            print=printer.print,
+        )
+        await picpocket.create_backup(api_backup)
+
+        matching_dumps(api_backup, cli_backup, backend)
+
+        main_location = await picpocket.get_location("main")
+        await picpocket.remove_location("main", force=True)
+
+        # postgres restore backup only works from a blank state
+        if backend == "postgres":
+            _wipe(picpocket.configuration.contents["backend"]["connection"])
+
+        await run_meta(
+            picpocket,
+            Namespace(command="restore", path=cli_backup),
+            print=printer.print,
+        )
+
+        assert main_location == await picpocket.get_location("main")
+
+    # upgrade
+    match backend:
+        case "sqlite":
+            starting_backup = VERSIONS_DIRECTORY / backend / "0.1.0.sqlite"
+            backup_file = tmp_path / "backup.sqlite"
+        case "postgres":
+            starting_backup = VERSIONS_DIRECTORY / backend / "0.1.0.sql"
+            backup_file = tmp_path / "backup.sql"
+
+    async with load_api(backend=backend) as picpocket:
+        if backend == "postgres":
+            _wipe(picpocket.configuration.contents["backend"]["connection"])
+
+        await picpocket.restore_backup(starting_backup)
+        await run_meta(picpocket, Namespace(command="upgrade", path=backup_file))
+
+        matching_dumps(starting_backup, backup_file, backend)
+
+        assert await picpocket.compatible_backend()
+
+    # unknown command
+    async with load_api() as picpocket:
         with pytest.raises(NotImplementedError):
             await run_meta(
                 picpocket,
@@ -3350,7 +3467,7 @@ async def test_run_image(load_api, tmp_path, image_files, test_images):
 
 
 @pytest.mark.asyncio
-async def test_run_tag(load_api):
+async def test_run_tag(load_api, tmp_path, image_files):
     from picpocket.cli import Output, run_tag
 
     async with load_api() as picpocket:
@@ -3397,7 +3514,9 @@ async def test_run_tag(load_api):
             ),
             print=printer.print,
         )
-        assert printer.json() == {"name": {"description": None, "children": {}}}
+        assert printer.json() == {
+            "name": {"description": None, "exemplar": None, "children": {}}
+        }
 
         await run_tag(
             picpocket,
@@ -3421,15 +3540,19 @@ async def test_run_tag(load_api):
         assert printer.json() == {
             "a": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "deeply": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
                             "nested": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "tag": {
                                         "description": "A tag description",
+                                        "exemplar": None,
                                         "children": {},
                                     },
                                 },
@@ -3438,7 +3561,7 @@ async def test_run_tag(load_api):
                     },
                 },
             },
-            "name": {"description": None, "children": {}},
+            "name": {"description": None, "exemplar": None, "children": {}},
         }
 
         # remove
@@ -3481,15 +3604,19 @@ async def test_run_tag(load_api):
         assert printer.json() == {
             "a": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "deeply": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
                             "nested": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "tag": {
                                         "description": "A tag description",
+                                        "exemplar": None,
                                         "children": {},
                                     },
                                 },
@@ -3500,8 +3627,13 @@ async def test_run_tag(load_api):
             },
             "name": {
                 "description": None,
+                "exemplar": None,
                 "children": {
-                    "child": {"description": "child's description", "children": {}}
+                    "child": {
+                        "description": "child's description",
+                        "exemplar": None,
+                        "children": {},
+                    },
                 },
             },
         }
@@ -3526,15 +3658,19 @@ async def test_run_tag(load_api):
         assert printer.json() == {
             "a": {
                 "description": None,
+                "exemplar": None,
                 "children": {
                     "deeply": {
                         "description": None,
+                        "exemplar": None,
                         "children": {
                             "nested": {
                                 "description": None,
+                                "exemplar": None,
                                 "children": {
                                     "tag": {
                                         "description": "A tag description",
+                                        "exemplar": None,
                                         "children": {},
                                     },
                                 },
@@ -3597,6 +3733,42 @@ async def test_run_tag(load_api):
             print=printer.print,
         )
         assert printer.text().split(" ", 1)[0] == "2"
+
+        # set tag example
+        main = tmp_path / "main"
+        main.mkdir()
+
+        shutil.copy2(image_files[0], (main / "a.JPEG"))
+        shutil.copy2(image_files[1], (main / "b.png"))
+
+        main_id = await picpocket.add_location("main", main, destination=True)
+        await picpocket.import_location(main_id)
+
+        image_id = (await picpocket.find_image(main / "a.JPEG")).id
+
+        await run_tag(
+            picpocket,
+            Namespace(
+                command="tag",
+                subcommand="set",
+                name="testing",
+                image=image_id,
+            ),
+            print=printer.print,
+        )
+        assert (await picpocket.get_tag("testing")).exemplar == image_id
+
+        # clear tag example
+        await run_tag(
+            picpocket,
+            Namespace(
+                command="tag",
+                subcommand="clear",
+                name="testing",
+            ),
+            print=printer.print,
+        )
+        assert (await picpocket.get_tag("testing")).exemplar is None
 
         # unknown command
         with pytest.raises(NotImplementedError):

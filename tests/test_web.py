@@ -1,4 +1,5 @@
 """Tests for the web interface"""
+
 import json
 import shutil
 from datetime import datetime
